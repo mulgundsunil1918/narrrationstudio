@@ -186,10 +186,11 @@
     font-size:clamp(46px,7vw,72px);font-weight:800;letter-spacing:-.03em;line-height:1;
     background:linear-gradient(100deg,var(--accent-2),#B08CFF 70%);
     -webkit-background-clip:text;background-clip:text;color:transparent;
-    font-variant-numeric:tabular-nums;
-    opacity:0;transition:opacity .45s ease
+    font-variant-numeric:tabular-nums
   }
-  #visitors .count.shown{opacity:1}
+  #visitors .count.shown{animation:countIn .5s ease both}
+  @keyframes countIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  @media(prefers-reduced-motion:reduce){ #visitors .count.shown{animation:none} }
   #visitors .label{
     margin-top:10px;font-size:12.5px;font-weight:700;letter-spacing:.16em;
     text-transform:uppercase;color:var(--faint)
@@ -585,7 +586,7 @@
       done = true;
       section.hidden = false;
       output.textContent = value.toLocaleString();
-      requestAnimationFrame(function () { output.classList.add('shown'); });
+      output.classList.add('shown');
     })
     .catch(function (error) {
       clearTimeout(timer);
