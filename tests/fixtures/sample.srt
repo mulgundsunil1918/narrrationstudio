@@ -1,0 +1,11 @@
+1
+00:00:00,000 --> 00:00:02,000
+Hello PediAid.
+
+2
+00:00:03,000 --> 00:00:05,000
+Clinical tools in one place.
+
+3
+00:00:05,000 --> 00:00:08,000
+Built for pediatric practice.

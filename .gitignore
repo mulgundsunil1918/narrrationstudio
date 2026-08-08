@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Environments — recreated by setup.sh, never committed
+.venv/
+venv/
+env/
+
+# Build output
+dist/
+build/
+*.icns
+*.iconset/
+
+# Generated media and projects: large, and personal to whoever ran the app
+*.wav
+*.mp3
+*.mp4
+*.mov
+*.narration
+*.pediavid
+
+# Subtitle files are the user's own content, not part of the app.
+# Test fixtures are the exception and are force-added.
+*.srt
+!tests/fixtures/*.srt
+
+# macOS
+.DS_Store
