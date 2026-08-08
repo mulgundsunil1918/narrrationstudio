@@ -28,5 +28,8 @@ build/
 *.srt
 !tests/fixtures/*.srt
 
+# The landing page and its screenshots are part of the project.
+!docs/**
+
 # macOS
 .DS_Store
