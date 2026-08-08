@@ -71,6 +71,7 @@
   .brand{display:flex;align-items:center;gap:11px;font-weight:650;font-size:17px}
   .brand img{width:30px;height:30px;border-radius:8px}
   .nav-links{margin-left:auto;display:flex;gap:28px;font-size:15px;color:var(--dim)}
+  .nav-cta{display:none}
   .nav-links a:hover{color:var(--text)}
   @media(max-width:820px){ .nav-links{display:none} }
 
@@ -91,9 +92,9 @@
   .lede{font-size:clamp(18px,2.2vw,22px);color:var(--dim);max-width:60ch;margin-top:24px}
 
   /* ---------- downloads ---------- */
-  .dl{display:flex;gap:14px;flex-wrap:wrap;margin-top:38px}
+  .dl{display:flex;gap:14px;flex-wrap:wrap;margin-top:38px;align-items:stretch}
   .btn{
-    display:flex;align-items:center;gap:14px;padding:15px 26px;border-radius:14px;
+    display:flex;align-items:center;gap:14px;padding:15px 26px;border-radius:14px;min-height:66px;
     background:var(--accent);color:#fff;font-weight:640;font-size:16px;
     border:1px solid var(--accent);transition:transform .16s ease,box-shadow .16s ease;
     box-shadow:0 10px 30px rgba(76,125,255,.26)
@@ -178,6 +179,77 @@
   .foot-links a:hover{color:var(--text)}
   .foot-bottom{margin-top:38px;padding-top:24px;border-top:1px solid var(--border);font-size:14px;color:var(--faint);display:flex;gap:12px;flex-wrap:wrap;align-items:center}
   .foot-bottom a{color:var(--bridgr)}
+
+  /* ---------- phones ---------- */
+  @media(max-width:640px){
+    body{font-size:16px}
+    .wrap{padding:0 20px}
+
+    .bridgr-in{padding:16px 20px;gap:12px}
+    .bridgr-text{font-size:19px}
+    .bridgr-cta{font-size:13.5px;padding:9px 18px}
+
+    .nav-in{padding:12px 20px}
+    .brand{font-size:16px}
+    .brand img{width:27px;height:27px}
+    /* The link row is hidden at this width, so keep one useful action. */
+    .nav-cta{
+      display:inline-flex;margin-left:auto;font-size:13.5px;font-weight:640;
+      background:var(--accent);color:#fff;padding:8px 15px;border-radius:9px
+    }
+
+    header.hero{padding:40px 0 40px}
+    .pill{font-size:12.5px;padding:6px 13px;margin-bottom:20px}
+    h1{font-size:clamp(32px,9vw,42px)}
+    .lede{font-size:17px;margin-top:18px}
+
+    /* Full width and equal height, so neither button looks like the lesser option. */
+    .dl{flex-direction:column;gap:11px;margin-top:28px}
+    .btn{width:100%;padding:14px 20px;min-height:0}
+    .btn small{font-size:12px}
+
+    .shot{margin-top:36px;border-radius:12px}
+    .shot figcaption{padding:12px 15px;font-size:13px}
+
+    section{padding:52px 0}
+    h2{font-size:clamp(25px,7vw,31px)}
+    .sub{font-size:16.5px}
+
+    .caps{padding:18px;font-size:12.5px;line-height:1.85}
+    .caps .n{display:block;margin-bottom:2px}
+    .split{gap:14px;margin-top:22px}
+    .box{padding:20px}
+
+    .steps{margin-top:30px}
+    .step{padding:20px;gap:15px}
+    .step h4{font-size:16.5px}
+    .step p{font-size:15px}
+
+    .grid{gap:13px;margin-top:30px;grid-template-columns:1fr}
+    .card{padding:21px}
+
+    /* A two-column table at 375px leaves ~120px for the label. Stack instead. */
+    table,tbody,tr,td,th{display:block;width:100%}
+    thead{display:none}
+    tr{padding:15px 0;border-bottom:1px solid var(--border)}
+    tr:last-child{border-bottom:none}
+    td{padding:0;border:none}
+    td:first-child{
+      width:auto;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;
+      color:var(--faint);margin-bottom:5px
+    }
+
+    .callout{padding:19px}
+    footer{padding:42px 0 36px}
+    .foot{gap:24px}
+    .foot-links{gap:18px 26px}
+  }
+
+  /* Bigger tap targets on anything touch-driven. */
+  @media(hover:none){
+    .nav-links a,.foot-links a{padding:6px 0;display:inline-block}
+    .btn:hover,.card:hover,.bridgr-cta:hover{transform:none}
+  }
 </style>
 </head>
 <body>
@@ -200,6 +272,7 @@
       <img src="assets/icon-512.png" alt="">
       <span>Narration&nbsp;Studio</span>
     </a>
+    <a class="nav-cta" href="#download">Download</a>
     <div class="nav-links">
       <a href="#idea">Why it sounds real</a>
       <a href="#how">How it works</a>
