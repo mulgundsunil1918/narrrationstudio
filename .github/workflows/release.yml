@@ -31,9 +31,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install PySide6==6.11.1 pytest==8.3.4 numpy==1.26.4 soundfile==0.14.0
       - name: Run the suite
-        # The TTS engine is not installed here, so the tests that need it are
-        # skipped; everything else must pass before anything is published.
-        run: pytest -q -p no:warnings --ignore=tests/test_ui_threading.py -k "not kokoro"
+        # PyTorch is ~1 GB and is not installed here, so tests that drive real
+        # synthesis skip themselves. Everything else must pass before anything
+        # is published. The Qt threading tests need a real window server and
+        # run locally rather than here.
+        run: pytest -p no:warnings --ignore=tests/test_ui_threading.py
         env:
           QT_QPA_PLATFORM: offscreen
 

@@ -1,0 +1,103 @@
+1
+00:00:00,000 --> 00:00:05,460
+Welcome to Northwind, a planning tool built specifically for small studios
+
+2
+00:00:05,460 --> 00:00:10,920
+and independent teams. Northwind brings together the schedules, budgets,
+
+3
+00:00:10,920 --> 00:00:16,380
+task boards, time tracking, invoices, client notes and reporting you reach
+
+4
+00:00:16,380 --> 00:00:21,840
+for every week, all in one place. The idea is simple: to make the
+
+5
+00:00:21,840 --> 00:00:27,300
+information you frequently need easier to find and easier to use. From the
+
+6
+00:00:27,300 --> 00:00:32,760
+home screen, Northwind is organised into six main sections. We have
+
+7
+00:00:32,760 --> 00:00:38,220
+planning, budgets, people, clients, reports and settings. Let's start with
+
+8
+00:00:38,220 --> 00:00:43,680
+planning. This section holds a wide range of scheduling views, from a
+
+9
+00:00:43,680 --> 00:00:49,140
+simple week grid to a full quarter roadmap, and it keeps everything in
+
+10
+00:00:49,140 --> 00:00:54,600
+step automatically. You can drag a task between days, split it across two
+
+11
+00:00:54,600 --> 00:01:00,060
+people, or mark it blocked and Northwind will flag anything downstream
+
+12
+00:01:00,060 --> 00:01:05,520
+that depends on it. Next is budgets. Here you can track a project against
+
+13
+00:01:05,520 --> 00:01:10,980
+its estimate, see where the hours are going, and compare this month with
+
+14
+00:01:10,980 --> 00:01:16,440
+the last one. We also show a running forecast so you know early if
+
+15
+00:01:16,440 --> 00:01:21,900
+something is drifting. The people section brings your team's availability
+
+16
+00:01:21,900 --> 00:01:27,360
+together in one place. You can see who is free, who is stretched, and how
+
+17
+00:01:27,360 --> 00:01:32,820
+much holiday is booked in the weeks ahead. Clients is where the
+
+18
+00:01:32,820 --> 00:01:38,280
+conversation lives. Every message, file and approval is attached to the
+
+19
+00:01:38,280 --> 00:01:43,740
+job it belongs to, so nothing is lost in a mailbox. Reports pulls all of
+
+20
+00:01:43,740 --> 00:01:49,200
+this into something you can send. Choose a period, pick the projects you
+
+21
+00:01:49,200 --> 00:01:54,660
+care about, and Northwind builds a summary you can export as a document or
+
+22
+00:01:54,660 --> 00:02:00,120
+a spreadsheet. Finally, settings is where you make it yours. You can
+
+23
+00:02:00,120 --> 00:02:05,580
+rename stages, change the working week, set your currency, and invite the
+
+24
+00:02:05,580 --> 00:02:11,040
+rest of the team. That's Northwind: a single place for the planning,
+
+25
+00:02:11,040 --> 00:02:16,500
+budgets and reporting a small studio needs, without the weight of tools
+
+26
+00:02:16,500 --> 00:02:21,960
+built for companies ten times the size.

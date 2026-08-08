@@ -32,6 +32,26 @@ SAMPLE = [
 ]
 
 
+def _engine_available() -> bool:
+    """Whether the local speech engine can actually run here.
+
+    CI installs the UI and audio libraries but not PyTorch, which is roughly a
+    gigabyte. Tests that drive real synthesis skip there; everything that can be
+    checked without it still runs on every push.
+    """
+    try:
+        from app.tts.registry import engine as get_engine
+
+        return get_engine("kokoro").is_available()[0]
+    except Exception:
+        return False
+
+
+requires_engine = pytest.mark.skipif(
+    not _engine_available(), reason="local speech engine is not installed"
+)
+
+
 def assert_actionable(error: OperationError) -> None:
     """Every user-facing error must say what, why and what next."""
     assert isinstance(error, OperationError)
@@ -132,6 +152,7 @@ class TestInvalidTimestamps:
 # -- 4 & 5. voice and model problems ------------------------------------
 
 
+@requires_engine
 class TestVoiceProblems:
     def test_unknown_voice_is_reported(self, tmp_path):
         report = run_preflight(SAMPLE, "kokoro", "not_a_real_voice", tmp_path / "o.wav")
@@ -190,6 +211,7 @@ class TestFFmpegMissing:
         error = next(c.error for c in report.checks if c.key == "ffmpeg" and not c.passed)
         assert not error.recoverable
 
+    @requires_engine
     def test_ffmpeg_failure_during_fitting_is_reported(self, monkeypatch):
         from app.core.errors import AudioError
 
@@ -285,6 +307,7 @@ class TestDiskSpace:
 # -- 9 & 10. TTS empty audio and segment failure -------------------------
 
 
+@requires_engine
 class TestTTSFailures:
     def test_empty_audio_is_a_reported_failure(self, monkeypatch):
         from app.tts.base import GenerationResult
@@ -357,6 +380,7 @@ class TestTTSFailures:
 # -- 11. cancellation ---------------------------------------------------
 
 
+@requires_engine
 class TestCancellation:
     def test_cancelling_stops_work_and_reports(self, monkeypatch):
         from app.tts.base import GenerationResult

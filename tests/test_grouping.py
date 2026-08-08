@@ -23,7 +23,10 @@ from app.narration.grouping import (
 )
 from app.srt.parser import parse_srt
 
-ENHANCED = Path.home() / "PediAid-TTS" / "PediAid_narration_enhanced.srt"
+#: A transcript-shaped fixture that lives in the repo, so the suite runs for
+#: anyone who clones it. Same characteristics as real Whisper output:
+#: contiguous captions, wrapped mid-sentence, almost none ending a sentence.
+TRANSCRIPT = Path(__file__).parent / "fixtures" / "transcript.srt"
 
 
 def plan_for(segments, mode=NarrationMode.NATURAL, **kwargs):
@@ -201,7 +204,7 @@ class TestExactMode:
         assert all(group.is_single for group in plan)
 
     def test_reproduces_the_original_behaviour_on_the_real_file(self):
-        segments = parse_srt(ENHANCED.read_text()).segments
+        segments = parse_srt(TRANSCRIPT.read_text()).segments
         plan = build_plan(segments, NarrationMode.EXACT)
         assert len(plan) == len(segments)
 
@@ -243,7 +246,7 @@ class TestCoverage:
 
     @pytest.fixture
     def segments(self):
-        return parse_srt(ENHANCED.read_text()).segments
+        return parse_srt(TRANSCRIPT.read_text()).segments
 
     @pytest.mark.parametrize("mode", [NarrationMode.NATURAL, NarrationMode.EXACT])
     def test_every_caption_appears_once(self, segments, mode):
@@ -272,10 +275,12 @@ class TestRealFile:
 
     @pytest.fixture
     def segments(self):
-        return parse_srt(ENHANCED.read_text()).segments
+        return parse_srt(TRANSCRIPT.read_text()).segments
 
-    def test_caption_count_unchanged(self, segments):
-        assert len(segments) == 64
+    def test_captions_are_contiguous_like_a_real_transcript(self, segments):
+        assert len(segments) > 20
+        for previous, following in zip(segments, segments[1:]):
+            assert following.start_ms == previous.end_ms
 
     def test_timestamps_unchanged_by_grouping(self, segments):
         before = [(s.start_ms, s.end_ms) for s in segments]
@@ -292,12 +297,14 @@ class TestRealFile:
         assert window.start_ms(plan.groups[0]) == segments[0].start_ms
         assert window.end_ms(plan.groups[-1]) == segments[-1].end_ms
 
-    def test_headline_sentence_is_one_utterance(self, segments):
-        # §Non-negotiable: captions 1 and 2 must be spoken continuously.
+    def test_a_sentence_spanning_two_captions_is_one_utterance(self, segments):
+        # The headline requirement: caption 1 does not end a sentence, so
+        # captions 1 and 2 must be spoken continuously.
         plan = build_plan(segments)
         group = plan.group_for_segment(segments[0].uid)
         assert segments[1].uid in group.segment_uids
-        assert "specifically for pediatrics and neonatology" in group.narration_text
+        joined = f"{segments[0].text.strip()} {segments[1].text.strip()}"
+        assert joined in group.narration_text
 
     def test_narration_text_has_no_boundary_artefacts(self, segments):
         plan = build_plan(segments)
