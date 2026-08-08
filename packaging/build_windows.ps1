@@ -54,12 +54,66 @@ Requirements
 Everything runs on your own machine. Nothing is uploaded.
 "@ | Set-Content (Join-Path $Staging "READ ME FIRST.txt") -Encoding UTF8
 
-# --- zip ----------------------------------------------------------------
+# --- icon ---------------------------------------------------------------
+$IconDir  = Join-Path $Dist "icon"
+$IconFile = Join-Path $IconDir "AppIcon.ico"
+if (-not (Test-Path $IconFile)) {
+    Write-Host "  Drawing the icon..."
+    $Py = Get-Command python -ErrorAction SilentlyContinue
+    if ($Py) {
+        python -m pip install --quiet PySide6==6.11.1 2>$null
+        python (Join-Path $Root "packaging\make_icon.py") $IconDir ico 2>$null | Out-Null
+    }
+}
+if (Test-Path $IconFile) { Write-Host "  Icon ready" }
+
+# --- portable zip -------------------------------------------------------
 $Zip = Join-Path $Dist "NarrationStudio-Windows.zip"
 if (Test-Path $Zip) { Remove-Item $Zip -Force }
 Compress-Archive -Path $Staging -DestinationPath $Zip -CompressionLevel Optimal
+Write-Host ("  Portable zip: {0:N1} MB" -f ((Get-Item $Zip).Length / 1MB))
 
-$Size = "{0:N1} MB" -f ((Get-Item $Zip).Length / 1MB)
+# --- installer ----------------------------------------------------------
+# Inno Setup ships on the GitHub Windows runners; install it when missing so
+# the script also works on a developer machine.
+$ISCC = @(
+    "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+    "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+if (-not $ISCC) {
+    Write-Host "  Inno Setup not found, installing..."
+    choco install innosetup -y --no-progress 2>&1 | Out-Null
+    $ISCC = @(
+        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+        "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+
+if ($ISCC) {
+    Write-Host "  Building the installer..."
+    $Version = "0.1.0"
+    $PyProject = Join-Path $Root "pyproject.toml"
+    if (Test-Path $PyProject) {
+        $Match = Select-String -Path $PyProject -Pattern '^version\s*=\s*"([^"]+)"' | Select-Object -First 1
+        if ($Match) { $Version = $Match.Matches[0].Groups[1].Value }
+    }
+    & $ISCC `
+        "/DAppVersion=$Version" `
+        "/DSourceDir=$Staging" `
+        "/DOutputDir=$Dist" `
+        "/DIconFile=$IconFile" `
+        (Join-Path $Root "packaging\windows\installer.iss") | Out-Null
+    $Setup = Join-Path $Dist "NarrationStudio-Setup.exe"
+    if (Test-Path $Setup) {
+        Write-Host ("  Installer:    {0:N1} MB" -f ((Get-Item $Setup).Length / 1MB))
+    } else {
+        Write-Warning "  Inno Setup ran but produced no installer."
+    }
+} else {
+    Write-Warning "  Inno Setup unavailable - shipping the portable zip only."
+}
+
 Write-Host ""
-Write-Host "  Built: $Zip  ($Size)"
+Write-Host "  Done: $Dist"
 Write-Host ""

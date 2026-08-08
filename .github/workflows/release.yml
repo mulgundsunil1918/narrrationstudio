@@ -75,13 +75,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Build the package
+      - name: Build the installer and the portable zip
         shell: pwsh
         run: ./packaging/build_windows.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: NarrationStudio-Windows
-          path: dist/NarrationStudio-Windows.zip
+          path: |
+            dist/NarrationStudio-Setup.exe
+            dist/NarrationStudio-Windows.zip
 
   publish:
     name: Publish release
@@ -97,6 +99,7 @@ jobs:
         with:
           files: |
             artifacts/**/*.dmg
+            artifacts/**/*.exe
             artifacts/**/*.zip
           generate_release_notes: true
           body: |
@@ -106,8 +109,10 @@ jobs:
             *Narration Studio* onto Applications. Right-click ▸ Open the first
             time, because the app is not notarised.
 
-            **Windows** — download `NarrationStudio-Windows.zip`, unzip anywhere,
-            run `NarrationStudio.bat`.
+            **Windows** — download `NarrationStudio-Setup.exe` and run it.
+            Windows SmartScreen will warn that the publisher is unknown, because
+            the installer is not code-signed: choose *More info* ▸ *Run anyway*.
+            A portable zip is also attached if you would rather not install.
 
             The first launch downloads the local speech engine (about 2 GB) and
             takes a few minutes. Every launch after that is immediate.

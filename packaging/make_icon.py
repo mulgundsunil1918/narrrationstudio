@@ -67,6 +67,16 @@ def draw(size: int) -> QPixmap:
     return pixmap
 
 
+def build_ico(destination: Path) -> Path:
+    """Write a Windows .ico containing every size an installer or shell asks for."""
+    destination.mkdir(parents=True, exist_ok=True)
+    path = destination / "AppIcon.ico"
+    # Qt writes a multi-resolution ICO when given the largest image; Windows
+    # downsamples from it, and 256 is the size the modern shell actually uses.
+    draw(256).save(str(path), "ICO")
+    return path
+
+
 def build(destination: Path) -> Path:
     """Write <destination>/AppIcon.icns, falling back to a PNG without Xcode."""
     destination.mkdir(parents=True, exist_ok=True)
@@ -102,7 +112,8 @@ def main() -> int:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     QGuiApplication([])
     target = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent / "build"
-    path = build(target)
+    fmt = sys.argv[2] if len(sys.argv) > 2 else "icns"
+    path = build_ico(target) if fmt == "ico" else build(target)
     print(path)
     return 0
 
