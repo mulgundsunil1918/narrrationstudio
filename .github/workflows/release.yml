@@ -57,14 +57,14 @@ jobs:
         run: |
           chmod +x packaging/build_macos.sh
           ./packaging/build_macos.sh
-      - name: Zip it
+      - name: Build the disk image
         run: |
-          cd dist
-          ditto -c -k --sequesterRsrc --keepParent "Narration Studio.app" "NarrationStudio-macOS.zip"
+          chmod +x packaging/make_dmg.sh
+          ./packaging/make_dmg.sh
       - uses: actions/upload-artifact@v4
         with:
           name: NarrationStudio-macOS
-          path: dist/NarrationStudio-macOS.zip
+          path: dist/NarrationStudio-macOS.dmg
 
   windows:
     name: Windows package
@@ -95,13 +95,15 @@ jobs:
       - name: Attach the packages to the release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*.zip
+          files: |
+            artifacts/**/*.dmg
+            artifacts/**/*.zip
           generate_release_notes: true
           body: |
             ## Install
 
-            **macOS** — download `NarrationStudio-macOS.zip`, unzip, drag
-            *Narration Studio.app* to Applications. Right-click ▸ Open the first
+            **macOS** — download `NarrationStudio-macOS.dmg`, open it, drag
+            *Narration Studio* onto Applications. Right-click ▸ Open the first
             time, because the app is not notarised.
 
             **Windows** — download `NarrationStudio-Windows.zip`, unzip anywhere,
