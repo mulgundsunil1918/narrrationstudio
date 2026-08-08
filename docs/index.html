@@ -586,7 +586,10 @@
       done = true;
       section.hidden = false;
       output.textContent = value.toLocaleString();
-      output.classList.add('shown');
+      // Decoration only, and only when someone is actually looking: a paused
+      // animation in a background tab would otherwise leave the number at its
+      // first keyframe, which is invisible.
+      if (document.visibilityState === 'visible') output.classList.add('shown');
     })
     .catch(function (error) {
       clearTimeout(timer);
