@@ -49,7 +49,9 @@ Requirements
 ------------
 * Python 3.12 or newer   https://www.python.org/downloads/
   Tick "Add python.exe to PATH" during installation.
-* FFmpeg                 winget install Gyan.FFmpeg
+
+That is the only thing you need. Everything else, including the audio
+components, is installed by the app on first launch.
 
 Everything runs on your own machine. Nothing is uploaded.
 "@ | Set-Content (Join-Path $Staging "READ ME FIRST.txt") -Encoding UTF8

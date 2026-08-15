@@ -247,11 +247,15 @@ def _plan_fill(generated_ms: int, target_ms: int, options: FitOptions) -> FitPla
     )
 
 
-def atempo_chain(factor: float) -> list[str]:
+def atempo_stages(factor: float) -> list[float]:
     """Break ``factor`` into atempo stages each within ffmpeg's legal range.
 
-    ``atempo`` only accepts 0.5–2.0 per instance, so 4× becomes ``2.0,2.0``.
+    ``atempo`` only accepts 0.5–2.0 per instance, so 4× becomes ``2.0, 2.0``.
     Preserved from the proof-of-concept, which this behaviour must not regress.
+
+    The rule lives here rather than beside either caller, because the filter is
+    now driven two ways — in-process through PyAV's filter graph, and through
+    the command line as a fallback — and they must chain identically.
     """
     if factor <= 0:
         raise ValueError(f"Speed factor must be positive, got {factor}")
@@ -265,7 +269,12 @@ def atempo_chain(factor: float) -> list[str]:
         stages.append(ATEMPO_MIN)
         remaining /= ATEMPO_MIN
     stages.append(remaining)
-    return [f"atempo={stage:.8f}" for stage in stages]
+    return stages
+
+
+def atempo_chain(factor: float) -> list[str]:
+    """The atempo stages as ffmpeg filter arguments."""
+    return [f"atempo={stage:.8f}" for stage in atempo_stages(factor)]
 
 
 def atempo_filter(factor: float) -> str:

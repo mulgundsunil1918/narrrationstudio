@@ -27,6 +27,13 @@ ctranslate2==4.8.1
 numpy==1.26.4
 soundfile==0.14.0
 
+# PyAV is FFmpeg, compiled into the wheel. Everything that used to shell out to
+# an ffmpeg binary — reading audio out of a video, fitting speech to its window,
+# writing the MP3 — runs against these libraries instead, so a new user is never
+# sent to Homebrew before the app will work. faster-whisper depends on it too;
+# it is pinned here because the app now relies on it directly.
+av==18.1.0
+
 # --- tests ---
 pytest==8.3.4
 

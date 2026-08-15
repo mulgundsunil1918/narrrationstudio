@@ -105,39 +105,15 @@ def fit_audio(
 def _apply_atempo(
     audio: np.ndarray, factor: float, sample_rate: int, ffmpeg: str
 ) -> np.ndarray:
-    """Pitch-preserving time-stretch via ffmpeg, using an argument array."""
-    import soundfile as sf
+    """Pitch-preserving time-stretch.
 
-    with tempfile.TemporaryDirectory(prefix="pediaid_fit_") as directory:
-        source = Path(directory) / "in.wav"
-        destination = Path(directory) / "out.wav"
-        sf.write(str(source), audio, sample_rate)
+    Runs against the FFmpeg libraries in-process, so nothing has to be installed
+    and no temporary file is written per group — which on a long video is
+    thousands of round trips through the disk that no longer happen.
+    """
+    from app.audio.media import time_stretch
 
-        command = [
-            ffmpeg, "-y", "-loglevel", "error",
-            "-i", str(source),
-            "-filter:a", atempo_filter(factor),
-            "-ar", str(sample_rate), "-ac", "1",
-            str(destination),
-        ]
-        try:
-            subprocess.run(command, check=True, capture_output=True)
-        except FileNotFoundError as exc:
-            raise AudioError(
-                "FFmpeg was not found, so speech cannot be fitted to its window.",
-                suggestion="Install it with: brew install ffmpeg",
-                cause=exc,
-            ) from exc
-        except subprocess.CalledProcessError as exc:
-            raise AudioError(
-                "FFmpeg could not adjust the speed of this narration group.",
-                suggestion="Try regenerating the group, or use a different voice.",
-                detail=exc.stderr.decode("utf-8", "replace")[:2000],
-                cause=exc,
-            ) from exc
-
-        fitted, _ = sf.read(str(destination), dtype="float32", always_2d=False)
-
+    fitted = time_stretch(audio, factor, sample_rate)
     if fitted.ndim > 1:
         fitted = fitted.mean(axis=1)
     return fitted.astype(np.float32, copy=False)
@@ -241,27 +217,9 @@ def write_mp3(
     path: Path, wav_path: Path, bitrate: str = "192k", ffmpeg: str = "ffmpeg"
 ) -> Path:
     """Transcode the finished WAV to MP3 alongside it."""
-    command = [
-        ffmpeg, "-y", "-loglevel", "error",
-        "-i", str(wav_path), "-codec:a", "libmp3lame", "-b:a", bitrate,
-        str(path),
-    ]
-    try:
-        subprocess.run(command, check=True, capture_output=True)
-    except FileNotFoundError as exc:
-        raise AudioError(
-            "FFmpeg was not found, so the MP3 could not be created.",
-            suggestion="Install it with: brew install ffmpeg. The WAV was still written.",
-            cause=exc,
-        ) from exc
-    except subprocess.CalledProcessError as exc:
-        raise AudioError(
-            "FFmpeg could not create the MP3.",
-            suggestion="The WAV export succeeded and can be used instead.",
-            detail=exc.stderr.decode("utf-8", "replace")[:2000],
-            cause=exc,
-        ) from exc
-    return path
+    from app.audio.media import encode_mp3
+
+    return encode_mp3(path, wav_path, bitrate)
 
 
 def summarise_safety(plans: list[FitPlan]) -> dict[SpeedSafety, int]:

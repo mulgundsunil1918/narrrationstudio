@@ -214,32 +214,33 @@ def _check_voice(report: PreflightReport, backend, voice_id: str) -> None:
 
 
 def _check_ffmpeg(report: PreflightReport) -> None:
-    path = shutil.which("ffmpeg")
-    if not path:
-        report.add(
-            Check(
-                "ffmpeg", "FFmpeg", False, "not found",
-                OperationError(
-                    ErrorCode.FFMPEG_NOT_FOUND,
-                    "FFmpeg is not installed, so speech cannot be fitted to your "
-                    "subtitle timings.",
-                    reason="No “ffmpeg” executable was found on this Mac.",
-                    recommended_action="Install it in Terminal with: brew install ffmpeg",
-                    recoverable=False,
-                    operation="preflight",
-                ),
-            )
-        )
+    """Audio processing, which ships with the app and needs nothing installed.
+
+    This used to fail whenever ``ffmpeg`` was missing from PATH and send the
+    user to Homebrew. The libraries are built into the app now, so this only
+    fails if that has somehow gone missing too — an install problem, not
+    something to hand the user a Terminal command for.
+    """
+    from app.audio.media import is_available
+
+    available, source = is_available()
+    if available:
+        report.add(Check("ffmpeg", "Audio processing ready", True, source))
         return
 
-    try:
-        result = subprocess.run(
-            [path, "-version"], capture_output=True, timeout=10, check=True
+    report.add(
+        Check(
+            "ffmpeg", "Audio processing", False, "unavailable",
+            OperationError(
+                ErrorCode.FFMPEG_NOT_FOUND,
+                "Speech cannot be fitted to your timings on this installation.",
+                reason="The audio components that ship with the app are missing.",
+                recommended_action="Reinstall Narration Studio.",
+                recoverable=False,
+                operation="preflight",
+            ),
         )
-        version = result.stdout.decode("utf-8", "replace").split()[2]
-    except Exception:
-        version = "installed"
-    report.add(Check("ffmpeg", "FFmpeg available", True, version))
+    )
 
 
 def _check_output(

@@ -197,19 +197,40 @@ class TestVoiceProblems:
 
 
 class TestFFmpegMissing:
-    def test_preflight_detects_missing_ffmpeg(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("app.core.preflight.shutil.which", lambda _n: None)
+    """FFmpeg ships inside the app, so its absence from PATH is a non-event.
+
+    These used to assert the opposite — that a missing ``ffmpeg`` executable
+    failed pre-flight and sent the user to Homebrew. Requiring a Terminal
+    command before the app would work at all was the most common reason it did
+    not run on a new Mac, and the libraries are bundled now.
+    """
+
+    def test_no_ffmpeg_on_path_is_not_a_problem(self, no_installed_binaries, tmp_path):
         report = run_preflight(SAMPLE, "kokoro", "af_heart", tmp_path / "o.wav")
+
+        check = next(c for c in report.checks if c.key == "ffmpeg")
+        assert check.passed, "a missing ffmpeg binary must not block generation"
+        assert "brew" not in (check.detail or "").lower()
+
+    def test_preflight_fails_only_when_nothing_can_process_audio(
+        self, monkeypatch, no_installed_binaries, tmp_path
+    ):
+        """The remaining failure mode is a broken install, not a missing tool.
+
+        Both routes have to be gone: no bundled libraries *and* no binary.
+        """
+        from app.audio import media
+
+        monkeypatch.setattr(media, "_av", lambda: None)
+        report = run_preflight(SAMPLE, "kokoro", "af_heart", tmp_path / "o.wav")
+
         error = next(c.error for c in report.checks if c.key == "ffmpeg" and not c.passed)
         assert_actionable(error)
         assert error.code is ErrorCode.FFMPEG_NOT_FOUND
-        assert "brew install ffmpeg" in error.recommended_action
-
-    def test_missing_ffmpeg_is_marked_unrecoverable(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("app.core.preflight.shutil.which", lambda _n: None)
-        report = run_preflight(SAMPLE, "kokoro", "af_heart", tmp_path / "o.wav")
-        error = next(c.error for c in report.checks if c.key == "ffmpeg" and not c.passed)
         assert not error.recoverable
+        # Never tell someone to run a package manager to fix their own install.
+        assert "brew" not in error.recommended_action.lower()
+        assert "reinstall" in error.recommended_action.lower()
 
     @requires_engine
     def test_ffmpeg_failure_during_fitting_is_reported(self, monkeypatch):

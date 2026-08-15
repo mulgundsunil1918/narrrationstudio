@@ -49,13 +49,9 @@ Download the latest build from
 The first launch downloads the speech engine (~2 GB) and takes a few minutes.
 Every launch after that is immediate.
 
-You also need **[FFmpeg](https://ffmpeg.org/download.html)** — it fits the
-speech to your subtitle timings:
-
-```bash
-brew install ffmpeg          # macOS
-winget install Gyan.FFmpeg   # Windows
-```
+Nothing else to install. FFmpeg arrives as a Python package rather than
+something you fetch yourself, so there is no Homebrew step and nothing that can
+be missing from your PATH.
 
 ## Run from source
 

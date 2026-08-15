@@ -48,11 +48,11 @@ macOS will say the app is from an unidentified developer, because it is not
 notarised by Apple. Right-click the app and choose Open, then Open again.
 You only do this once.
 
-One other thing you need
-------------------------
-FFmpeg, which fits the speech to your subtitle timings. In Terminal:
-
-    brew install ffmpeg
+That is everything
+------------------
+Nothing else to install. The first launch downloads the voice, which takes a
+few minutes and happens once; after that it opens straight away and works
+offline.
 
 Everything runs on your own Mac. Nothing is uploaded.
 NOTE

@@ -38,14 +38,8 @@ if [ -z "$PY" ]; then
 fi
 ok "Python $("$PY" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])') ($PY)"
 
-# --- FFmpeg -------------------------------------------------------------
-if command -v ffmpeg >/dev/null 2>&1; then
-    ok "FFmpeg $(ffmpeg -version 2>/dev/null | head -1 | awk '{print $3}')"
-else
-    warn "FFmpeg was not found."
-    info "Speech cannot be fitted to subtitle timings without it."
-    info "Install it with:  brew install ffmpeg"
-fi
+# FFmpeg is not checked for here: it arrives as a Python package (PyAV), so
+# there is nothing for anyone to install and nothing that can be missing.
 
 # --- virtual environment ------------------------------------------------
 if [ ! -d "$VENV" ]; then
@@ -78,7 +72,8 @@ check("soundfile", lambda: importlib.import_module("soundfile").__version__)
 check("PyTorch", lambda: importlib.import_module("torch").__version__)
 check("Kokoro", lambda: importlib.import_module("kokoro").__version__ if hasattr(importlib.import_module("kokoro"), "__version__") else "installed")
 check("PySide6", lambda: importlib.import_module("PySide6").__version__)
-check("FFmpeg", lambda: "found" if shutil.which("ffmpeg") else (_ for _ in ()).throw(RuntimeError("not on PATH")))
+check("Audio (FFmpeg built in)", lambda: importlib.import_module("av").ffmpeg_version_info)
+check("Transcription", lambda: importlib.import_module("faster_whisper").__version__)
 
 from pathlib import Path
 cache = Path.home() / ".cache" / "huggingface" / "hub" / "models--hexgrad--Kokoro-82M"

@@ -33,6 +33,39 @@ def data_sandbox() -> Path:
     return _SANDBOX
 
 
+class _BlindShutil:
+    """``shutil`` with ``which`` finding nothing, and everything else intact.
+
+    Replacing the module wholesale with a stub is how ``disk_usage`` disappears
+    out from under the pre-flight check, so this delegates.
+    """
+
+    @staticmethod
+    def which(_name, *_args, **_kwargs):
+        return None
+
+    def __getattr__(self, name):
+        import shutil
+
+        return getattr(shutil, name)
+
+
+@pytest.fixture
+def no_installed_binaries(monkeypatch):
+    """A machine with no ffmpeg and no ffprobe — the fresh Mac the app targets.
+
+    Bound to each module's own ``shutil`` name rather than patching the real
+    ``shutil.which``, which would blind the whole process for the test.
+    """
+    from app.audio import media
+    from app.core import preflight
+
+    blind = _BlindShutil()
+    monkeypatch.setattr(media, "shutil", blind)
+    monkeypatch.setattr(preflight, "shutil", blind)
+    return blind
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _guard_real_data():
     """Fail loudly if anything escapes the sandbox back to the real directory."""

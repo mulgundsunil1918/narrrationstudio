@@ -11,15 +11,13 @@ clock yet, and the audio is what defines one.
 from __future__ import annotations
 
 import logging
-import shutil
-import subprocess
 import tempfile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Sequence
 
-from app.core.errors import AudioError, StudioError
+from app.core.errors import StudioError
 
 logger = logging.getLogger(__name__)
 
@@ -99,93 +97,35 @@ class Transcriber(ABC):
 # -- audio extraction ----------------------------------------------------
 
 
-def media_duration_ms(path: Path, ffprobe: str = "ffprobe") -> int:
+def media_duration_ms(path: Path) -> int:
     """Length of a media file in milliseconds, or 0 if it cannot be read."""
-    try:
-        result = subprocess.run(
-            [ffprobe, "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
-            capture_output=True, check=True, timeout=60,
-        )
-        return int(round(float(result.stdout.decode().strip()) * 1000))
-    except Exception:
-        return 0
+    from app.audio.media import probe
+
+    return probe(path).duration_ms
 
 
-def has_audio_track(path: Path, ffprobe: str = "ffprobe") -> bool:
+def has_audio_track(path: Path) -> bool:
     """Whether the file contains any audio at all.
 
     Worth checking before spending minutes on a silent screen recording, which
     is exactly the file someone is most likely to try first.
     """
-    try:
-        result = subprocess.run(
-            [ffprobe, "-v", "error", "-select_streams", "a",
-             "-show_entries", "stream=codec_type",
-             "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
-            capture_output=True, check=True, timeout=60,
-        )
-        return b"audio" in result.stdout
-    except Exception:
-        # If the check itself fails, do not block the user; let the real
-        # extraction produce the error.
-        return True
+    from app.audio.media import probe
+
+    info = probe(path)
+    # If the file could not be read at all, do not block the user here; let the
+    # extraction produce the real error, which explains far more.
+    return True if not info.readable else info.has_audio
 
 
-def extract_audio(
-    source: Path, destination: Path | None = None, ffmpeg: str = "ffmpeg"
-) -> Path:
+def extract_audio(source: Path, destination: Path | None = None) -> Path:
     """Write ``source``'s audio as 16 kHz mono WAV, the shape Whisper expects."""
-    if not shutil.which(ffmpeg):
-        raise AudioError(
-            "FFmpeg is needed to read the audio out of your video.",
-            reason="No “ffmpeg” executable was found on this computer.",
-            suggestion="Install it with: brew install ffmpeg",
-        )
+    from app.audio.media import decode_to_wav
 
     if destination is None:
         directory = Path(tempfile.mkdtemp(prefix="narration_transcribe_"))
         destination = directory / f"{source.stem}-16k.wav"
-    destination.parent.mkdir(parents=True, exist_ok=True)
-
-    command = [
-        ffmpeg, "-y", "-loglevel", "error",
-        "-i", str(source),
-        "-vn",                       # drop video
-        "-ac", "1",                  # mono
-        "-ar", str(SAMPLE_RATE),     # 16 kHz
-        "-c:a", "pcm_s16le",
-        str(destination),
-    ]
-    try:
-        subprocess.run(command, check=True, capture_output=True, timeout=1800)
-    except subprocess.TimeoutExpired as exc:
-        raise AudioError(
-            "Reading the audio out of that file took too long and was stopped.",
-            reason="FFmpeg did not finish within 30 minutes.",
-            suggestion="Try a shorter video, or export the audio yourself first.",
-            cause=exc,
-        ) from exc
-    except subprocess.CalledProcessError as exc:
-        detail = exc.stderr.decode("utf-8", "replace")[:2000]
-        raise AudioError(
-            "The audio could not be read out of that file.",
-            reason="FFmpeg could not decode it, so the format may be unsupported.",
-            suggestion="Try exporting the video again, or use a .mp4 or .mov file.",
-            detail=detail,
-            cause=exc,
-        ) from exc
-
-    if not destination.exists() or destination.stat().st_size == 0:
-        raise AudioError(
-            "That file does not seem to contain any audio.",
-            reason="Reading it produced an empty audio track.",
-            suggestion=(
-                "If this is a silent screen recording, there is nothing to "
-                "transcribe — write the script instead and import it as text."
-            ),
-        )
-    return destination
+    return decode_to_wav(source, destination, rate=SAMPLE_RATE)
 
 
 # -- conversion ----------------------------------------------------------
