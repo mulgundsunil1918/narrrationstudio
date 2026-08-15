@@ -116,6 +116,7 @@ class NarrationScreen(QWidget):
         self._column.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         self._column.addWidget(self._build_modes())
+        self._column.addWidget(self._build_pacing())
         self._column.addWidget(self._build_length())
         self._column.addWidget(self._build_explainer())
         self._column.addWidget(self._build_timeline())
@@ -161,6 +162,66 @@ class NarrationScreen(QWidget):
             self._options[mode] = option
         self._options[self._state.narration.mode].radio.setChecked(True)
         return wrapper
+
+    def _build_pacing(self) -> QWidget:
+        """How strictly the voice is bent to the caption timings.
+
+        This exists because AI-written timings guess wrong: a short sentence
+        in a long window was slowed to fill it, a dense one in a short window
+        was rushed — the same narration drawling one moment and gabbling the
+        next. The default lets speech stay near its natural pace and finish in
+        the silence after a caption instead.
+        """
+        card = Card()
+        card.add(section_label("Pacing"))
+
+        self._pacing = Segmented(
+            [
+                ("balanced", "Balanced"),
+                ("natural", "Natural pace"),
+                ("exact", "Exact sync"),
+            ],
+            initial=self._state.narration.pacing,
+        )
+        self._pacing.changed.connect(self._on_pacing)
+        card.add(self._pacing)
+
+        self._pacing_note = caption("", wrap=True)
+        card.add(self._pacing_note)
+        self._describe_pacing(self._state.narration.pacing)
+        return card
+
+    def _on_pacing(self, key: str) -> None:
+        self._state.narration.pacing = key
+        self._describe_pacing(key)
+        self._state.invalidate_plan()
+        if self._state.outcome is not None:
+            self._state.report(
+                "Pacing changed — generate again to hear it. Cached speech "
+                "makes that quick.",
+                "info",
+            )
+
+    def _describe_pacing(self, key: str) -> None:
+        notes = {
+            "balanced": (
+                "The voice stays close to its natural speed. A long sentence "
+                "may finish in the quiet after its caption instead of being "
+                "rushed; a short one is padded rather than dragged out. "
+                "Recommended when the timings were written by an AI."
+            ),
+            "natural": (
+                "The voice is barely bent at all — at most a few percent either "
+                "way. Sentences finish in the gaps, and short captions simply "
+                "leave silence. The most listenable, the loosest sync."
+            ),
+            "exact": (
+                "Every caption window is filled to the millisecond, stretching "
+                "or squeezing the voice as far as needed. Tightest sync; can "
+                "sound slow or rushed where the timings do not match the words."
+            ),
+        }
+        self._pacing_note.setText(notes.get(key, ""))
 
     def _build_length(self) -> QWidget:
         card = Card()

@@ -244,6 +244,16 @@ def generate(
         target_ms = window.target_ms(group)
         caption_text = window.narration_text(group)
 
+        # The room to the next group's start — window plus the silent gap
+        # after it. Long speech may borrow from that gap instead of being
+        # sped up; it can never reach the next group, and the captions
+        # themselves never move.
+        if index + 1 < total:
+            next_start_ms = window.start_ms(narration.groups[index + 1])
+        else:
+            next_start_ms = timeline_ms
+        available_ms = max(target_ms, next_start_ms - group_start)
+
         if settings.preview_until_ms is not None and group_start >= settings.preview_until_ms:
             continue
         if only_groups is not None and index not in only_groups:
@@ -306,7 +316,8 @@ def generate(
                     cache.put(key, audio, result.sample_rate)
 
             fitted, fit_plan = fit_audio(
-                audio, target_ms, settings.sample_rate, settings.fit
+                audio, target_ms, settings.sample_rate, settings.fit,
+                available_ms=available_ms,
             )
         except Exception as exc:
             # One bad group must not cost the other twenty. Record it, leave its

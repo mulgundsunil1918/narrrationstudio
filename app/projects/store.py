@@ -54,6 +54,8 @@ class ProjectData:
     max_group_ms: int = 60_000
     crossfade_ms: int = 40
     apply_pronunciation: bool = True
+    #: How strictly speech is bent to the caption timings.
+    pacing: str = "balanced"
 
     processing_preset: str = "Natural"
     processing_intensity: int = 50

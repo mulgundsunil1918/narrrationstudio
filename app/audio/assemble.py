@@ -72,15 +72,20 @@ def fit_audio(
     sample_rate: int = DEFAULT_SAMPLE_RATE,
     options: FitOptions | None = None,
     ffmpeg: str = "ffmpeg",
+    available_ms: int | None = None,
 ) -> tuple[np.ndarray, FitPlan]:
-    """Make ``audio`` exactly ``target_ms`` long, without ever truncating speech.
+    """Make ``audio`` fit its window, without ever truncating speech.
 
-    Speeds up or slows down with ffmpeg's pitch-preserving ``atempo``, then pads
-    with silence at the end if anything is left over.
+    Speeds up or slows down with pitch-preserving ``atempo``, pads with silence
+    at the end if anything is left over, and — when the plan sanctioned it —
+    lets speech run past the window into the silent gap after it rather than
+    rushing. ``available_ms`` bounds that borrowing; see :func:`plan_fit`.
     """
     generated_ms = int(round(len(audio) / sample_rate * 1000))
-    plan = plan_fit(generated_ms, target_ms, options)
+    plan = plan_fit(generated_ms, target_ms, options, available_ms)
     target_samples = ms_to_samples(target_ms, sample_rate)
+    # The room this group may actually occupy: its window plus sanctioned spill.
+    allowed_samples = ms_to_samples(target_ms + plan.spill_ms, sample_rate)
 
     if target_samples <= 0:
         return np.zeros(0, dtype=np.float32), plan
@@ -92,12 +97,13 @@ def fit_audio(
     if abs(plan.speed_factor - 1.0) > 1e-6:
         working = _apply_atempo(working, plan.speed_factor, sample_rate, ffmpeg)
 
-    # Silence goes only at the END of the group, never between its captions.
+    # Silence goes only at the END of the group, never between its captions —
+    # and only up to the window. Spill is speech, not something to pad to.
     if len(working) < target_samples:
         working = np.pad(working, (0, target_samples - len(working)))
-    elif len(working) > target_samples:
+    elif len(working) > allowed_samples:
         # atempo lands within a few samples; trimming that is not truncating speech.
-        working = working[:target_samples]
+        working = working[:allowed_samples]
 
     return working.astype(np.float32, copy=False), plan
 

@@ -46,7 +46,14 @@ class NarrationSettings:
     max_group_ms: int = 60_000
     crossfade_ms: int = 40
     apply_pronunciation: bool = True
-    fit: FitOptions = field(default_factory=FitOptions)
+    #: How strictly speech is bent to the caption timings — see PACING_PRESETS.
+    pacing: str = "balanced"
+
+    @property
+    def fit(self) -> FitOptions:
+        from app.audio.timing import fit_options_for
+
+        return fit_options_for(self.pacing)
 
 
 class AppState(QObject):
@@ -261,6 +268,7 @@ class AppState(QObject):
         self.project.max_group_ms = self.narration.max_group_ms
         self.project.crossfade_ms = self.narration.crossfade_ms
         self.project.apply_pronunciation = self.narration.apply_pronunciation
+        self.project.pacing = self.narration.pacing
         if self.generated_path:
             self.project.generated_wav_path = str(self.generated_path)
         if self.media_path:
@@ -338,6 +346,8 @@ class AppState(QObject):
             max_group_ms=data.max_group_ms,
             crossfade_ms=data.crossfade_ms,
             apply_pronunciation=data.apply_pronunciation,
+            pacing=data.pacing if data.pacing in ("exact", "balanced", "natural")
+            else "balanced",
         )
         self.media_path = Path(data.source_media_path) if data.source_media_path else None
         self._plan = None

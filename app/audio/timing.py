@@ -61,6 +61,41 @@ class FitOptions:
     #: Refuse to compress past this without explicit confirmation.
     max_compress_factor: float = 1.30
     allow_extreme_compression: bool = False
+    #: How much of the silent gap AFTER a group's window its speech may borrow
+    #: before being sped up. The gap belongs to nobody — the SRT put silence
+    #: there — and letting a long sentence finish in it at natural pace sounds
+    #: far better than rushing the sentence to the caption boundary. 0 keeps
+    #: the boundary exact; the captions themselves are never moved either way.
+    gap_borrow_fraction: float = 0.0
+
+
+#: Ready-made pacing choices, from strict sync to natural delivery.
+#:
+#: "balanced" is the default: barely-perceptible speed changes, and long
+#: sentences may finish in the silence after their caption. "exact" is the old
+#: behaviour — fill every window to the millisecond, stretching down to 0.75×
+#: and squeezing to 1.30×, which is where "sometimes it drawls, sometimes it
+#: gabbles" came from when the timings were an AI's guesses. "natural" barely
+#: bends the voice at all and pads or borrows instead.
+PACING_PRESETS: dict[str, FitOptions] = {
+    "exact": FitOptions(),
+    "balanced": FitOptions(
+        min_stretch_factor=0.95,
+        hard_min_stretch_factor=0.88,
+        gap_borrow_fraction=0.65,
+    ),
+    "natural": FitOptions(
+        min_stretch_factor=0.98,
+        hard_min_stretch_factor=0.97,
+        gap_borrow_fraction=0.90,
+        max_trailing_silence_ms=1500,
+    ),
+}
+
+
+def fit_options_for(pacing: str) -> FitOptions:
+    """The FitOptions for a pacing name; unknown names get the default."""
+    return PACING_PRESETS.get(pacing, PACING_PRESETS["balanced"])
 
 
 @dataclass(frozen=True)
@@ -79,6 +114,9 @@ class FitPlan:
     #: True when the trailing silence is large enough to be heard as a hole in
     #: the narration rather than as natural phrasing.
     unnatural_silence: bool = False
+    #: How far the speech runs past its window into the silent gap after it —
+    #: sanctioned borrowing, never a collision with the next group.
+    spill_ms: int = 0
 
     @property
     def final_ms(self) -> int:
@@ -95,13 +133,21 @@ class FitPlan:
 
     @property
     def fits(self) -> bool:
-        return self.final_ms <= self.target_ms
+        return self.final_ms <= self.target_ms + self.spill_ms
 
 
 def plan_fit(
-    generated_ms: int, target_ms: int, options: FitOptions | None = None
+    generated_ms: int,
+    target_ms: int,
+    options: FitOptions | None = None,
+    available_ms: int | None = None,
 ) -> FitPlan:
-    """Decide how to reconcile generated speech with its SRT window."""
+    """Decide how to reconcile generated speech with its SRT window.
+
+    ``available_ms`` is the room from this group's start to the next group's —
+    the window plus the silent gap after it. Compression may borrow from that
+    gap, per ``options.gap_borrow_fraction``; nothing else uses it.
+    """
     options = options or FitOptions()
 
     if target_ms <= 0:
@@ -144,44 +190,64 @@ def plan_fit(
         )
 
     if difference > 0:
-        return _plan_compression(generated_ms, target_ms, options)
+        return _plan_compression(generated_ms, target_ms, options, available_ms)
     return _plan_fill(generated_ms, target_ms, options)
 
 
 def _plan_compression(
-    generated_ms: int, target_ms: int, options: FitOptions
+    generated_ms: int,
+    target_ms: int,
+    options: FitOptions,
+    available_ms: int | None,
 ) -> FitPlan:
-    """Speech is longer than the window: speed it up, never truncate it."""
-    factor = generated_ms / target_ms
+    """Speech is longer than the window: borrow the gap, then speed up.
+
+    Never truncate. The gap after the window is used first because slightly
+    late is barely noticeable and slightly fast is very noticeable.
+    """
+    allowed_ms = target_ms
+    if (
+        available_ms is not None
+        and available_ms > target_ms
+        and options.gap_borrow_fraction > 0
+    ):
+        gap = available_ms - target_ms
+        allowed_ms = target_ms + int(gap * options.gap_borrow_fraction)
+
+    effective_ms = min(generated_ms, allowed_ms)
+    spill_ms = effective_ms - target_ms
+    factor = generated_ms / effective_ms
     safety = classify_speed(factor)
     needs_confirmation = (
         factor > options.max_compress_factor and not options.allow_extreme_compression
     )
 
+    borrowed = f" (after borrowing {spill_ms / 1000:.1f}s of the following gap)" if spill_ms else ""
     message = ""
     if safety is SpeedSafety.WARNING:
-        message = f"Speech runs {factor:.2f}× long; a slight speed-up is applied."
+        message = f"Speech runs {factor:.2f}× long{borrowed}; a slight speed-up is applied."
     elif safety is SpeedSafety.STRONG_WARNING:
         message = (
-            f"Speech runs {factor:.2f}× long. It will be noticeably fast — "
+            f"Speech runs {factor:.2f}× long{borrowed}. It will be noticeably fast — "
             "consider shortening the text or lengthening the window."
         )
     elif safety is SpeedSafety.NEEDS_CONFIRMATION:
         message = (
-            f"Speech needs {factor:.2f}× compression to fit. That is too fast to "
-            "apply automatically."
+            f"Speech needs {factor:.2f}× compression to fit{borrowed}. That is too "
+            "fast to apply automatically."
         )
 
     return FitPlan(
         target_ms=target_ms,
         generated_ms=generated_ms,
         speed_factor=factor,
-        fitted_ms=target_ms,
+        fitted_ms=effective_ms,
         pad_ms=0,
-        action=FitAction.COMPRESS,
+        action=FitAction.NONE if abs(factor - 1.0) < 1e-9 else FitAction.COMPRESS,
         safety=safety,
         needs_confirmation=needs_confirmation,
         message=message,
+        spill_ms=spill_ms,
     )
 
 
