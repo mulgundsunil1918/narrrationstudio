@@ -75,10 +75,63 @@ KOKORO_VOICES: tuple[dict, ...] = (
      "tags": ("Narrator",), "lang_code": "b", "language": "English (British)"},
     {"identifier": "bf_isabella", "name": "Isabella", "gender": "Female",
      "tags": ("Professional",), "lang_code": "b", "language": "English (British)"},
+    {"identifier": "bf_alice", "name": "Alice", "gender": "Female",
+     "tags": ("Calm",), "lang_code": "b", "language": "English (British)"},
+    {"identifier": "bf_lily", "name": "Lily", "gender": "Female",
+     "tags": ("Bright",), "lang_code": "b", "language": "English (British)"},
     {"identifier": "bm_george", "name": "George", "gender": "Male",
      "tags": ("Narrator",), "lang_code": "b", "language": "English (British)"},
     {"identifier": "bm_lewis", "name": "Lewis", "gender": "Male",
      "tags": ("Deep",), "lang_code": "b", "language": "English (British)"},
+    {"identifier": "bm_daniel", "name": "Daniel", "gender": "Male",
+     "tags": ("Professional",), "lang_code": "b", "language": "English (British)"},
+    {"identifier": "bm_fable", "name": "Fable", "gender": "Male",
+     "tags": ("Warm", "Narrator"), "lang_code": "b", "language": "English (British)"},
+
+    # -- Indian ---------------------------------------------------------
+    #
+    # Kokoro trains these on Hindi and calls them alpha, beta, omega and psi.
+    # They are given ordinary names here for the same reason the American ones
+    # are not called af_1 and af_2: a voice you are choosing by ear deserves a
+    # name. The model identifier is unchanged, so nothing is disguised.
+    #
+    # Both scripts work, and both were checked rather than assumed: English
+    # narration was generated and transcribed back word for word, "dextrose"
+    # and "glucose" included, and Devanagari input was recognised as Hindi.
+    {"identifier": "hf_alpha", "name": "Ananya", "gender": "Female",
+     "tags": ("Narrator", "Medical / Educational"),
+     "lang_code": "h", "language": "Indian English / Hindi",
+     "notes": "Reads English and Hindi. A good default for an Indian audience."},
+    {"identifier": "hf_beta", "name": "Ishani", "gender": "Female",
+     "tags": ("Calm", "Professional"),
+     "lang_code": "h", "language": "Indian English / Hindi"},
+    {"identifier": "hm_omega", "name": "Arjun", "gender": "Male",
+     "tags": ("Narrator", "Professional"),
+     "lang_code": "h", "language": "Indian English / Hindi"},
+    {"identifier": "hm_psi", "name": "Kabir", "gender": "Male",
+     "tags": ("Warm", "Calm"),
+     "lang_code": "h", "language": "Indian English / Hindi"},
+
+    # -- other languages ------------------------------------------------
+    #
+    # Only the ones whose pronunciation rules are installed here. Kokoro also
+    # ships Japanese and Mandarin voices, and they are deliberately absent:
+    # they need pyopenjtalk and ordered_set, which are not in this environment,
+    # so listing them would offer a voice that fails the moment it is picked.
+    {"identifier": "ef_dora", "name": "Dora", "gender": "Female",
+     "tags": ("Narrator",), "lang_code": "e", "language": "Spanish"},
+    {"identifier": "em_alex", "name": "Alex", "gender": "Male",
+     "tags": ("Narrator",), "lang_code": "e", "language": "Spanish"},
+    {"identifier": "ff_siwis", "name": "Siwis", "gender": "Female",
+     "tags": ("Narrator",), "lang_code": "f", "language": "French"},
+    {"identifier": "if_sara", "name": "Sara", "gender": "Female",
+     "tags": ("Narrator",), "lang_code": "i", "language": "Italian"},
+    {"identifier": "im_nicola", "name": "Nicola", "gender": "Male",
+     "tags": ("Narrator",), "lang_code": "i", "language": "Italian"},
+    {"identifier": "pf_dora", "name": "Dora", "gender": "Female",
+     "tags": ("Narrator",), "lang_code": "p", "language": "Portuguese"},
+    {"identifier": "pm_alex", "name": "Alex", "gender": "Male",
+     "tags": ("Narrator",), "lang_code": "p", "language": "Portuguese"},
 )
 
 HF_REPO = "hexgrad/Kokoro-82M"

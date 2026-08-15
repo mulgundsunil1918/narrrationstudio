@@ -417,6 +417,74 @@ class ExportWorker(QObject):
         self.finished.emit(written)
 
 
+class VideoExportWorker(QObject):
+    """Writes the finished video: narration on the picture, subtitles optional."""
+
+    progress = Signal(object, str)   # (fraction | None, message)
+    finished = Signal(object)        # VideoExportResult
+    failed = Signal(object)          # OperationError
+    cancelled = Signal()
+
+    def __init__(self, request) -> None:
+        super().__init__()
+        self._request = request
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
+
+    def _should_cancel(self) -> bool:
+        return self._cancelled
+
+    def run(self) -> None:
+        from app.core.errors import StudioError
+        from app.video.export import Cancelled, export_video
+
+        try:
+            result = export_video(
+                self._request,
+                on_progress=lambda fraction, message: self.progress.emit(fraction, message),
+                should_cancel=self._should_cancel,
+            )
+        except Cancelled:
+            self.cancelled.emit()
+            return
+        except StudioError as exc:
+            logger.warning("Video export failed: %s", exc)
+            self.failed.emit(
+                OperationError(
+                    ErrorCode.VIDEO_IMPORT_FAILED,
+                    getattr(exc, "message", str(exc)),
+                    reason=getattr(exc, "reason", ""),
+                    recommended_action=getattr(exc, "suggestion", "")
+                    or "Export the audio on its own and use your video editor.",
+                    details=getattr(exc, "detail", ""),
+                    operation="export_video",
+                )
+            )
+            return
+        except Exception as exc:
+            logger.exception("Video export failed")
+            self.failed.emit(
+                capture(
+                    exc,
+                    ErrorCode.VIDEO_IMPORT_FAILED,
+                    user_message="The video could not be created.",
+                    recommended_action=(
+                        "Try again, or export the audio on its own and use your "
+                        "video editor."
+                    ),
+                    operation="export_video",
+                )
+            )
+            return
+
+        if self._cancelled:
+            self.cancelled.emit()
+            return
+        self.finished.emit(result)
+
+
 class _ThreadRegistry(QObject):
     """Owns every running worker thread and disposes of them on the UI thread.
 

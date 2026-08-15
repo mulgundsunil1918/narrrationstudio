@@ -139,6 +139,25 @@ class VoiceCard(Card):
         self._preview_button.setText("Loading…" if busy else "▶  Preview")
 
 
+#: Which Kokoro language codes each filter covers. Indian first after "any",
+#: because it is the one people most often come here looking for and hunting
+#: for it down a list of forty voices is the whole problem.
+LANGUAGE_CODES: dict[str, tuple[str, ...]] = {
+    "Indian": ("h",),
+    "US English": ("a",),
+    "British": ("b",),
+    "Other": ("e", "f", "i", "p"),
+}
+
+LANGUAGE_FILTERS: tuple[tuple[str, str], ...] = (
+    ("Any language", "Any language"),
+    ("Indian", "Indian"),
+    ("US English", "US English"),
+    ("British", "British"),
+    ("Other", "Other"),
+)
+
+
 class VoiceScreen(QWidget):
     """The voice library and the basic voice controls."""
 
@@ -149,6 +168,7 @@ class VoiceScreen(QWidget):
         self._state = state
         self._cards: list[VoiceCard] = []
         self._filter = "All"
+        self._language = "Any language"
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -192,6 +212,15 @@ class VoiceScreen(QWidget):
         column = QVBoxLayout(wrapper)
         column.setContentsMargins(28, 18, 20, 20)
         column.setSpacing(14)
+
+        # Two rows, because language and voice quality are separate questions.
+        # Cramming them into one strip made "Indian" sit beside "Female" as
+        # though picking one ruled out the other.
+        self._languages = Segmented(
+            [(key, label) for key, label in LANGUAGE_FILTERS], initial="Any language"
+        )
+        self._languages.changed.connect(self._on_language)
+        column.addWidget(self._languages)
 
         self._categories = Segmented(
             [(name, name) for name in ("All", "Favourites", "Female", "Male", "Narrator")],
@@ -311,6 +340,14 @@ class VoiceScreen(QWidget):
         self._refresh_cards()
 
     def _matches(self, voice: Voice) -> bool:
+        return self._matches_language(voice) and self._matches_category(voice)
+
+    def _matches_language(self, voice: Voice) -> bool:
+        if self._language == "Any language":
+            return True
+        return voice.lang_code in LANGUAGE_CODES.get(self._language, ())
+
+    def _matches_category(self, voice: Voice) -> bool:
         if self._filter == "All":
             return True
         if self._filter == "Favourites":
@@ -321,6 +358,10 @@ class VoiceScreen(QWidget):
 
     def _on_filter(self, key: str) -> None:
         self._filter = key
+        self.reload()
+
+    def _on_language(self, key: str) -> None:
+        self._language = key
         self.reload()
 
     def _refresh_cards(self) -> None:

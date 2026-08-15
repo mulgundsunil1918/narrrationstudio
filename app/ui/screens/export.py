@@ -51,6 +51,8 @@ class ExportScreen(QWidget):
         super().__init__(parent)
         self._state = state
         self._thread = None
+        self._video_thread = None
+        self._video_worker = None
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -194,17 +196,63 @@ class ExportScreen(QWidget):
         return card
 
     def _build_video(self) -> QWidget:
-        card = Card(quiet=True)
-        card.add(section_label("Video"))
-        card.add(
-            muted(
-                "Combining your narration with a video file is the next milestone. "
-                "For now, export the WAV and drop it into your editor — it matches "
-                "your subtitle timeline exactly.",
-                wrap=True,
-            )
-        )
-        return card
+        from app.ui.screens.video_panel import VideoPanel
+
+        self._video_panel = VideoPanel(self._state)
+        self._video_panel.export_requested.connect(self.export_video)
+        return self._video_panel
+
+    # -- video -----------------------------------------------------------
+
+    def export_video(self, request) -> None:
+        """Run the export off the UI thread, so a long re-encode cannot freeze it."""
+        from app.ui.workers import VideoExportWorker, run_in_thread
+
+        if self._video_thread is not None:
+            self._state.report("A video export is already running.", "warning")
+            return
+
+        worker = VideoExportWorker(request)
+        # Bound methods with an explicit queued connection: a lambda here has no
+        # thread affinity and would touch widgets from the worker thread.
+        worker.progress.connect(self._on_video_progress, Qt.ConnectionType.QueuedConnection)
+        worker.finished.connect(self._on_video_finished, Qt.ConnectionType.QueuedConnection)
+        worker.failed.connect(self._on_video_failed, Qt.ConnectionType.QueuedConnection)
+        worker.cancelled.connect(self._on_video_cancelled, Qt.ConnectionType.QueuedConnection)
+        self._video_worker = worker
+        self._video_thread = run_in_thread(worker, self)
+        self._video_panel.set_busy(True, "Starting…")
+
+    def _on_video_progress(self, fraction, message: str) -> None:
+        if fraction is None:
+            self._video_panel.set_busy(True, message)
+        else:
+            self._video_panel.set_busy(True, f"{message}  ({int(fraction * 100)}%)")
+
+    def _on_video_finished(self, result) -> None:
+        self._video_thread = None
+        self._video_worker = None
+        self._video_panel.set_busy(False, "")
+        extra = ""
+        if result.subtitle_path is not None:
+            extra = f" · {result.subtitle_path.name} saved beside it"
+        elif result.burned_captions:
+            extra = f" · {result.burned_captions} subtitles burned in"
+        self._state.report(f"Saved {result.path.name}{extra}", "success")
+        self._show_result(result.path)
+        for warning in result.warnings:
+            self._state.report(warning, "warning")
+
+    def _on_video_failed(self, error) -> None:
+        self._video_thread = None
+        self._video_worker = None
+        self._video_panel.set_busy(False, "")
+        self._state.error_raised.emit(error)
+
+    def _on_video_cancelled(self) -> None:
+        self._video_thread = None
+        self._video_worker = None
+        self._video_panel.set_busy(False, "Stopped.")
 
     def _format_row(self, name: str, detail: str) -> QWidget:
         row = QWidget()
