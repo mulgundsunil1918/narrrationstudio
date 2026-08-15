@@ -155,28 +155,32 @@ def build_prompt(brand: str = "", terms: str = "") -> str:
 
 
 #: The workflow shown on the Home screen, before a file is ever imported.
+#:
+#: Two routes, because there are two situations. A screen recording usually has
+#: no voice on it at all and the script has to be written; a talking-head video
+#: already has the words and they only need extracting. The first is the more
+#: common case for tutorials and demos, so it leads.
 WORKFLOW_STEPS: tuple[tuple[str, str, str], ...] = (
     (
         "1",
-        "Record your video, with your own voice on it",
-        "Speak the script normally. The recording is only used to get an accurate "
-        "transcript with timings — this app replaces the voice afterwards.",
+        "Start with your video",
+        "A screen recording is fine, and it does not need any voice on it. "
+        "Narration Studio supplies the voice; the video only has to exist.",
     ),
     (
         "2",
-        "Get the words out, with their timings",
-        "Quickest free route: upload the video to YouTube as unlisted, let it add "
-        "subtitles automatically, then download them as .srt. Most editors do it "
-        "too — CapCut, DaVinci Resolve, Premiere Pro and Kdenlive all have "
-        "automatic captions you can export. ChatGPT cannot do this part; it reads "
-        "text, not audio.",
+        "Get a script with timings",
+        "If the video is silent, upload it to ChatGPT and ask it to write a "
+        "voice-over script with timings — it will watch the video and tell you "
+        "what to say and when. If you already narrated it yourself, ask instead "
+        "for the words that were spoken, with their timings.",
     ),
     (
         "3",
-        "Tidy up the words in ChatGPT",
-        "Speech-to-text mis-hears names and punctuates badly, which is what makes "
-        "narration sound wrong. Paste the prompt below with your .srt — it fixes "
-        "the wording while keeping every timestamp identical.",
+        "Ask for it as a .srt file",
+        "Same chat: ask ChatGPT to give you that script as an .srt with the "
+        "timings. Paste the prompt below at the same time and it will also tidy "
+        "the wording so it reads naturally aloud.",
     ),
     (
         "4",
