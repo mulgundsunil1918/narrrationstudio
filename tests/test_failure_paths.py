@@ -397,6 +397,71 @@ class TestTTSFailures:
         generate(SAMPLE, GenerationSettings(use_cache=False), only_groups=[0])
         assert len(seen) == 1, "retry regenerated more than the failed segment"
 
+    def test_a_qt_checked_bool_cannot_kill_the_run(self, monkeypatch):
+        """clicked.connect(self.start) fed `checked=False` into only_groups.
+
+        Every generation started from that button then died on `in False`,
+        while the footer's no-argument path worked — the worst kind of bug,
+        present on one route and invisible on the other. A bool must behave
+        as "no filter", never reach the membership test.
+        """
+        import numpy as np
+
+        from app.tts.base import GenerationResult
+        from app.tts.registry import engine as get_engine
+
+        def fake(request):
+            return GenerationResult(
+                np.full(24_000, 0.1, dtype=np.float32), 24_000, 1000, "kokoro", request.voice
+            )
+
+        monkeypatch.setattr(get_engine("kokoro"), "generate", fake)
+        outcome = generate(
+            SAMPLE, GenerationSettings(use_cache=False), only_groups=False
+        )
+        assert not outcome.failures, outcome.failures
+        assert outcome.audio is not None
+
+
+# -- 10b. the Qt checked-bool trap, everywhere --------------------------
+
+
+def test_no_signal_connects_directly_to_a_method_with_optional_params():
+    """``clicked.connect(self.method)`` is a trap when the method has defaults.
+
+    ``clicked``/``toggled``/``triggered`` emit a ``checked`` bool, and Qt will
+    happily deliver it into the first optional parameter. The method then runs
+    with an argument nobody wrote, of the wrong type, on one call path only.
+    That is exactly how generation died from the Generate button while working
+    from the footer. Such connections must go through a lambda that drops the
+    bool.
+    """
+    import ast
+    import re
+    from pathlib import Path
+
+    offenders: list[str] = []
+    for path in (Path(__file__).resolve().parents[1] / "app").rglob("*.py"):
+        source = path.read_text()
+        methods: dict[str, tuple[int, int]] = {}
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.FunctionDef):
+                required = len(node.args.args) - len(node.args.defaults) - 1
+                methods[node.name] = (required, len(node.args.defaults))
+        for match in re.finditer(
+            r"\.(?:clicked|toggled|triggered)\.connect\(self\.(\w+)\)", source
+        ):
+            name = match.group(1)
+            required, optional = methods.get(name, (None, 0))
+            if required == 0 and optional > 0:
+                line = source[: match.start()].count("\n") + 1
+                offenders.append(f"{path.name}:{line} -> {name}")
+
+    assert not offenders, (
+        "these connections will receive Qt's checked bool as a real argument: "
+        + ", ".join(offenders)
+    )
+
 
 # -- 11. cancellation ---------------------------------------------------
 

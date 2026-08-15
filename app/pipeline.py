@@ -195,6 +195,14 @@ def generate(
     token = token or CancellationToken()
     cancelled = False
 
+    # A bool here is never a group filter — it is a Qt `checked` flag that fell
+    # through a signal connection into an optional parameter. It once killed
+    # every generation started from a button, so it is neutralised at the
+    # boundary rather than trusted anywhere below.
+    if isinstance(only_groups, bool):
+        logger.warning("only_groups received a bool (%s); treating as no filter", only_groups)
+        only_groups = None
+
     if not segments:
         raise StudioError(
             "There are no subtitles to generate from.",

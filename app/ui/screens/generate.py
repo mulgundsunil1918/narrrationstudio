@@ -141,7 +141,10 @@ class GenerateScreen(QWidget):
         actions.addWidget(self._fix)
 
         self._generate = PrimaryButton("Generate Narration")
-        self._generate.clicked.connect(self.start)
+        # Not connect(self.start): clicked carries a `checked` bool, and start's
+        # optional parameter would swallow it — every click of this button then
+        # ran start(only_groups=False) and generation died on `in False`.
+        self._generate.clicked.connect(lambda _checked=False: self.start())
         actions.addWidget(self._generate)
         self._preflight_card.add_layout(actions)
         return self._preflight_card
