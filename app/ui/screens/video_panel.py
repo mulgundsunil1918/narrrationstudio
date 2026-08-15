@@ -106,7 +106,10 @@ class VideoPanel(Card):
         if path:
             self._video = Path(path)
             self._state.media_path = self._video
+            if self._crop_choice.current() == "custom":
+                self._load_crop_editor()
             self._refresh()
+            self._redraw_preview()
 
     # -- crop ------------------------------------------------------------
 
@@ -176,6 +179,7 @@ class VideoPanel(Card):
                 note += " Reshaping re-encodes the video, so it takes longer."
             self._crop_note.setText(note)
         self._update_preview_visibility()
+        self._refresh()
         self._redraw_preview()
 
     def _load_crop_editor(self) -> None:
@@ -234,7 +238,9 @@ class VideoPanel(Card):
     def _on_mode(self, key: str) -> None:
         self._style_panel.setVisible(key == "burn")
         self._update_preview_visibility()
-        self._describe_mode()
+        # _refresh rather than just re-describing: whether Export is possible
+        # depends on the mode now that a subtitle-only export is allowed.
+        self._refresh()
         self._redraw_preview()
 
     def _update_preview_visibility(self) -> None:
@@ -460,8 +466,6 @@ class VideoPanel(Card):
         return row
 
     def _on_export(self) -> None:
-        from app.video.export import VideoExportRequest
-
         if self._video is None:
             self._state.report("Choose a video first.", "warning")
             return
@@ -474,32 +478,57 @@ class VideoPanel(Card):
         )
         if not path:
             return
+        self.export_requested.emit(self.build_request(Path(path)))
+
+    def build_request(self, output_path: Path):
+        """Everything the export needs, from the panel's current choices."""
+        from app.video.export import VideoExportRequest
 
         mode = self._mode.current()
-        self.export_requested.emit(
-            VideoExportRequest(
-                video_path=self._video,
-                output_path=Path(path),
-                audio_path=self._state.generated_path,
-                segments=list(self._state.segments),
-                sidecar_subtitles=mode == "sidecar",
-                burn_subtitles=mode == "burn",
-                style=self._style,
-                crop=self._current_crop(),
-            )
+        return VideoExportRequest(
+            video_path=self._video,
+            output_path=output_path,
+            audio_path=self._narration_file(),
+            segments=list(self._state.segments),
+            sidecar_subtitles=mode == "sidecar",
+            burn_subtitles=mode == "burn",
+            style=self._style,
+            crop=self._current_crop(),
         )
+
+    def _narration_file(self) -> Path | None:
+        """The narration as a file, written on demand from memory if need be.
+
+        The generated audio lives in memory; a WAV exists on disk only if the
+        user happened to press Export Audio first. Gating on the memory and
+        sending the file used to mean a generated-but-unsaved narration was
+        silently left off the video — the one outcome worse than an error.
+        """
+        saved = self._state.generated_path
+        if saved is not None and Path(saved).exists():
+            return Path(saved)
+
+        audio = self._state.generated_audio
+        outcome = self._state.outcome
+        if audio is None or outcome is None:
+            return None
+
+        from app.audio.assemble import write_wav
+        from app.config import cache_dir
+
+        target = cache_dir() / "video-export-narration.wav"
+        return write_wav(target, audio, outcome.sample_rate)
 
     # -- state -----------------------------------------------------------
 
     def _on_project_changed(self) -> None:
         if self._video is None and self._state.media_path is not None:
             self._video = self._state.media_path
+        if self._crop_choice.current() == "custom":
+            self._load_crop_editor()
         self._refresh()
 
     def _refresh(self) -> None:
-        # A new video means a new frame under the custom crop rectangle.
-        if self._crop_choice.current() == "custom":
-            self._load_crop_editor()
         if self._video is None:
             self._source_label.setText(
                 "No video chosen. Pick the video you want the narration on."
@@ -507,21 +536,41 @@ class VideoPanel(Card):
         else:
             self._source_label.setText(f"Using {self._video.name}")
 
-        ready = self._video is not None and self._state.generated_audio is not None
-        self._export.setEnabled(ready)
-        if self._video is None:
+        has_narration = self._state.generated_audio is not None
+        # Burning subtitles or reshaping is a legitimate export on its own —
+        # the video simply keeps the sound it already has.
+        changes_picture = (
+            self._mode.current() != "none" or self._current_crop() is not None
+        )
+        self._export.setEnabled(
+            self._video is not None and (has_narration or changes_picture)
+        )
+
+        if self._video is None or has_narration:
             self._status.setText("")
-        elif self._state.generated_audio is None:
-            self._status.setText("Generate the narration first.")
+        elif changes_picture:
+            self._status.setText(
+                "No narration in this session, so the video keeps its own "
+                "sound. Generate first if you want the narration on it."
+            )
         else:
-            self._status.setText("")
+            self._status.setText(
+                "Generate the narration first — a reopened project starts "
+                "without audio. Or choose subtitles or a new shape to export "
+                "the video without it."
+            )
         self._describe_mode()
 
     def set_busy(self, busy: bool, message: str = "") -> None:
-        self._export.setEnabled(not busy and self._video is not None)
         self._export.setText("Exporting…" if busy else "Export Video")
-        if message:
-            self._status.setText(message)
+        if busy:
+            self._export.setEnabled(False)
+            if message:
+                self._status.setText(message)
+        else:
+            self._refresh()
+            if message:
+                self._status.setText(message)
 
 
 def _font_choices() -> list[str]:
