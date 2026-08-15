@@ -25,7 +25,7 @@ import numpy as np
 from app.core.errors import AudioError, StudioError
 from app.core.models import Segment
 from app.video.captions import CaptionLayer, blend, render_caption
-from app.video.crop import CropSpec
+from app.video.crop import CropSpec, FreeCrop
 from app.video.style import SubtitleStyle
 
 logger = logging.getLogger(__name__)
@@ -52,9 +52,10 @@ class VideoExportRequest:
     #: Painted into the picture. Requires re-encoding the video.
     burn_subtitles: bool = False
     style: SubtitleStyle = field(default_factory=SubtitleStyle)
-    #: Cut the picture to a new shape. Also requires re-encoding — a crop that
-    #: kept the original bitstream would be no crop at all.
-    crop: "CropSpec | None" = None
+    #: Cut the picture down: a preset shape or a hand-drawn rectangle. Either
+    #: way it requires re-encoding — a crop that kept the original bitstream
+    #: would be no crop at all.
+    crop: "CropSpec | FreeCrop | None" = None
     crf: int = DEFAULT_CRF
 
     @property

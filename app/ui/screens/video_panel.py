@@ -111,6 +111,7 @@ class VideoPanel(Card):
     # -- crop ------------------------------------------------------------
 
     def _build_crop(self) -> QWidget:
+        from app.ui.widgets.cropbox import CropBox
         from app.video.crop import CROP_CHOICES
 
         holder = QWidget()
@@ -119,19 +120,26 @@ class VideoPanel(Card):
         column.setSpacing(7)
         column.addWidget(label("Shape", "Muted"))
 
-        self._crop_choice = Segmented(
-            [(key, label_text) for key, label_text, _aspect in CROP_CHOICES],
-            initial="original",
-        )
+        choices = [(key, label_text) for key, label_text, _aspect in CROP_CHOICES]
+        choices.append(("custom", "Custom"))
+        self._crop_choice = Segmented(choices, initial="original")
         self._crop_choice.changed.connect(self._on_crop)
         column.addWidget(self._crop_choice)
 
-        # Which slice survives the cut. A screen recording's action is rarely
-        # dead centre, so keeping only the middle would crop the wrong thing.
+        # Which slice survives a preset cut. A screen recording's action is
+        # rarely dead centre, so keeping only the middle would crop the wrong
+        # thing.
         self._pan = LabeledSlider("Which part to keep", 0, 100, 50, suffix="%")
         self._pan.valueChanged.connect(lambda _v: self._on_crop(self._crop_choice.current()))
         self._pan.setVisible(False)
         column.addWidget(self._pan)
+
+        # The hand-drawn rectangle, for when no preset shape is the right one.
+        self._crop_editor = CropBox()
+        self._crop_editor.setVisible(False)
+        self._crop_editor.edited.connect(self._on_custom_edited)
+        self._crop_editor.committed.connect(self._on_custom_committed)
+        column.addWidget(self._crop_editor)
 
         self._crop_note = caption("", wrap=True)
         column.addWidget(self._crop_note)
@@ -140,27 +148,64 @@ class VideoPanel(Card):
     def _current_crop(self):
         from app.video.crop import crop_for
 
-        if self._crop_choice.current() == "original":
+        key = self._crop_choice.current()
+        if key == "original":
             return None
-        return crop_for(self._crop_choice.current(), self._pan.value() / 100)
+        if key == "custom":
+            return self._crop_editor.crop()
+        return crop_for(key, self._pan.value() / 100)
 
     def _on_crop(self, key: str) -> None:
-        self._pan.setVisible(key != "original")
-        notes = {
-            "original": "",
-            "9:16": "Tall, for Reels, Shorts and WhatsApp status. The sides are "
-                    "cut away — the slider picks which part stays.",
-            "1:1": "Square, for feeds. The sides are cut away — the slider "
-                   "picks which part stays.",
-            "4:3": "The classic screen shape.",
-            "16:9": "Standard widescreen, for YouTube and presentations.",
-        }
-        note = notes.get(key, "")
-        if key != "original":
-            note += " Reshaping re-encodes the video, so it takes longer."
-        self._crop_note.setText(note)
+        self._pan.setVisible(key not in ("original", "custom"))
+        self._crop_editor.setVisible(key == "custom")
+        if key == "custom":
+            self._load_crop_editor()
+            self._describe_custom(self._crop_editor.crop())
+        else:
+            notes = {
+                "original": "",
+                "9:16": "Tall, for Reels, Shorts and WhatsApp status. The sides "
+                        "are cut away — the slider picks which part stays.",
+                "1:1": "Square, for feeds. The sides are cut away — the slider "
+                       "picks which part stays.",
+                "4:3": "The classic screen shape.",
+                "16:9": "Standard widescreen, for YouTube and presentations.",
+            }
+            note = notes.get(key, "")
+            if note:
+                note += " Reshaping re-encodes the video, so it takes longer."
+            self._crop_note.setText(note)
         self._update_preview_visibility()
         self._redraw_preview()
+
+    def _load_crop_editor(self) -> None:
+        """Give the editor the frame it draws on, and remember the true size."""
+        from app.video.preview import source_image
+
+        image, dimensions = source_image(self._video)
+        self._source_dimensions = dimensions
+        self._crop_editor.set_frame(image)
+
+    def _on_custom_edited(self, crop) -> None:
+        # Live while dragging: keep it to the label, nothing expensive.
+        self._describe_custom(crop)
+
+    def _on_custom_committed(self, crop) -> None:
+        self._describe_custom(crop)
+        self._redraw_preview()
+
+    def _describe_custom(self, crop) -> None:
+        width, height = getattr(self, "_source_dimensions", (0, 0))
+        if width and height:
+            _x, _y, crop_w, crop_h = crop.rect(width, height)
+            size = f"Keeping {crop_w}×{crop_h} of {width}×{height}. "
+        else:
+            size = ""
+        self._crop_note.setText(
+            f"{size}Drag the box to move it, pull an edge or a corner to "
+            "resize, or drag on the dimmed area to draw a new one. Reshaping "
+            "re-encodes the video, so it takes longer."
+        )
 
     # -- subtitles -------------------------------------------------------
 
@@ -193,8 +238,15 @@ class VideoPanel(Card):
         self._redraw_preview()
 
     def _update_preview_visibility(self) -> None:
-        """The preview earns its space whenever the picture will change."""
-        show = self._mode.current() == "burn" or self._current_crop() is not None
+        """The preview earns its space whenever the picture will change.
+
+        In custom mode the crop editor already shows the frame, so the static
+        preview only appears alongside it when subtitles are being burned in —
+        it is then showing something the editor does not: the finished result.
+        """
+        custom = self._crop_choice.current() == "custom"
+        burn = self._mode.current() == "burn"
+        show = burn or (self._current_crop() is not None and not custom)
         self._preview_holder.setVisible(show)
 
     def _describe_mode(self) -> None:
@@ -445,6 +497,9 @@ class VideoPanel(Card):
         self._refresh()
 
     def _refresh(self) -> None:
+        # A new video means a new frame under the custom crop rectangle.
+        if self._crop_choice.current() == "custom":
+            self._load_crop_editor()
         if self._video is None:
             self._source_label.setText(
                 "No video chosen. Pick the video you want the narration on."

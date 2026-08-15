@@ -57,6 +57,45 @@ class CropSpec:
         return x, y, crop_w, crop_h
 
 
+@dataclass(frozen=True)
+class FreeCrop:
+    """A hand-drawn crop: any rectangle, held as fractions of the frame.
+
+    Fractions rather than pixels for the same reason subtitle sizes are
+    percentages — the rectangle is drawn on a scaled-down preview, and it has
+    to mean the same thing on the full-resolution frame at export time.
+    """
+
+    left: float = 0.1
+    top: float = 0.1
+    width: float = 0.8
+    height: float = 0.8
+
+    #: Below this the encoder is fine but the result is a postage stamp.
+    MIN_FRACTION = 0.05
+
+    @property
+    def label(self) -> str:
+        return "custom"
+
+    def normalised(self) -> "FreeCrop":
+        """The same rectangle with every value pulled back into the frame."""
+        width = min(1.0, max(self.MIN_FRACTION, self.width))
+        height = min(1.0, max(self.MIN_FRACTION, self.height))
+        left = min(1.0 - width, max(0.0, self.left))
+        top = min(1.0 - height, max(0.0, self.top))
+        return FreeCrop(left, top, width, height)
+
+    def rect(self, width: int, height: int) -> tuple[int, int, int, int]:
+        """The (x, y, w, h) to keep from a ``width`` x ``height`` frame."""
+        spec = self.normalised()
+        crop_w = min(_even(width), max(16, _even(width * spec.width)))
+        crop_h = min(_even(height), max(16, _even(height * spec.height)))
+        x = max(0, min(width - crop_w, round(width * spec.left)))
+        y = max(0, min(height - crop_h, round(height * spec.top)))
+        return x, y, crop_w, crop_h
+
+
 #: The shapes people actually export for, with where each one goes.
 CROP_CHOICES: tuple[tuple[str, str, tuple[int, int] | None], ...] = (
     ("original", "Original", None),

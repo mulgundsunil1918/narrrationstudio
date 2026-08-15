@@ -16,7 +16,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage
 
 from app.video.captions import blend, render_caption
-from app.video.crop import CropSpec
+from app.video.crop import CropSpec, FreeCrop
 from app.video.style import SubtitleStyle
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ def preview_frame(
     text: str,
     style: SubtitleStyle,
     target_width: int,
-    crop: "CropSpec | None" = None,
+    crop: "CropSpec | FreeCrop | None" = None,
     draw_caption: bool = True,
 ) -> tuple[QImage, str]:
     """Return a preview image and a line describing what is being shown.
@@ -71,6 +71,21 @@ def preview_frame(
     )
     scale = shown.width() / width
     return shown, f"{note} · shown at {round(scale * 100)}% of {width}×{height}"
+
+
+def source_image(video: Path | None) -> tuple[QImage, tuple[int, int]]:
+    """The sample frame as a QImage, plus the video's true dimensions.
+
+    This is what the interactive crop editor draws on: the full frame, before
+    any crop, so the rectangle is chosen against the whole picture.
+    """
+    frame, _note = _source_frame(video)
+    height, width = frame.shape[:2]
+    image = QImage(
+        np.ascontiguousarray(frame).data, width, height, width * 3,
+        QImage.Format.Format_RGB888,
+    ).copy()
+    return image, (width, height)
 
 
 def _source_frame(video: Path | None) -> tuple[np.ndarray, str]:

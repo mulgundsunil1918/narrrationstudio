@@ -29,9 +29,12 @@ SEGMENTS = [
 
 @pytest.fixture(scope="module")
 def qt_app():
-    from PySide6.QtGui import QGuiApplication
+    # A full QApplication, not QGuiApplication: the crop editor is a widget,
+    # and a widget under a gui-only application aborts the process outright.
+    # Only one kind can exist per process, so the whole file uses the bigger one.
+    from PySide6.QtWidgets import QApplication
 
-    return QGuiApplication.instance() or QGuiApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 @pytest.fixture
@@ -255,6 +258,152 @@ class TestCropMaths:
         assert crop_for("original") is None
         assert crop_for("nonsense") is None
         assert crop_for("9:16").label == "9:16"
+
+
+class TestFreeCrop:
+    def test_fractions_become_even_pixels(self):
+        from app.video.crop import FreeCrop
+
+        x, y, w, h = FreeCrop(0.25, 0.25, 0.5, 0.5).rect(1920, 1080)
+        assert (x, y) == (480, 270)
+        assert (w, h) == (960, 540)
+        assert w % 2 == 0 and h % 2 == 0
+
+    def test_out_of_range_values_are_pulled_back_into_the_frame(self):
+        from app.video.crop import FreeCrop
+
+        # A drag can momentarily produce nonsense; the rect must never.
+        x, y, w, h = FreeCrop(-0.4, 1.7, 3.0, -1.0).rect(1920, 1080)
+        assert 0 <= x <= 1920 - w
+        assert 0 <= y <= 1080 - h
+        assert w >= 16 and h >= 16
+
+    def test_a_sliver_is_widened_to_something_encodable(self):
+        from app.video.crop import FreeCrop
+
+        _x, _y, w, h = FreeCrop(0.5, 0.5, 0.001, 0.001).rect(320, 180)
+        assert w >= 16 and h >= 16
+
+    def test_full_frame_stays_full_frame(self):
+        from app.video.crop import FreeCrop
+
+        assert FreeCrop(0.0, 0.0, 1.0, 1.0).rect(1920, 1080) == (0, 0, 1920, 1080)
+
+
+def test_free_crop_keeps_the_drawn_region(qt_app, two_tone_video: Path, tmp_path: Path):
+    """A rectangle drawn over the left half must come back red."""
+    from app.video.crop import FreeCrop
+
+    result = export_video(
+        VideoExportRequest(
+            video_path=two_tone_video, output_path=tmp_path / "drawn.mp4",
+            crop=FreeCrop(0.0, 0.0, 0.45, 1.0),
+        )
+    )
+    assert result.reencoded
+    picture = frame_at(result.path, 0.5)
+    assert picture.shape[1] < 320
+    red = (picture[:, :, 0].astype(int) - picture[:, :, 2]).mean()
+    assert red > 40, "the crop kept the wrong part of the frame"
+
+
+class TestCropBoxInteraction:
+    """Driving the editor's drag logic the way mouse events would."""
+
+    def _editor(self, qt_app):
+        """An editor whose widget and frame are both 640x360, so a widget pixel
+        is exactly a frame pixel — the widget's own minimum height (230) would
+        silently letterbox anything shorter and shift every coordinate."""
+        from PySide6.QtGui import QImage
+
+        from app.ui.widgets.cropbox import CropBox
+
+        editor = CropBox()
+        editor.resize(640, 360)
+        editor.set_frame(QImage(640, 360, QImage.Format.Format_RGB888))
+        area = editor._image_rect()
+        assert (area.left(), area.top()) == (0, 0), "mapping must be 1:1 for these tests"
+        return editor
+
+    def test_dragging_the_middle_moves_the_rectangle(self, qt_app):
+        from PySide6.QtCore import QPointF
+
+        from app.video.crop import FreeCrop
+
+        editor = self._editor(qt_app)
+        editor.set_crop(FreeCrop(0.1, 0.1, 0.5, 0.5))
+        committed = []
+        editor.committed.connect(committed.append)
+
+        editor.begin(QPointF(224, 126))         # centre of the rectangle
+        editor.drag(QPointF(288, 162))          # +64px right, +36px down = +0.1 each
+        editor.finish()
+
+        crop = committed[-1]
+        assert crop.left == pytest.approx(0.2, abs=0.01)
+        assert crop.top == pytest.approx(0.2, abs=0.01)
+        assert crop.width == pytest.approx(0.5, abs=0.01)   # size unchanged
+
+    def test_pulling_an_edge_resizes_only_that_edge(self, qt_app):
+        from PySide6.QtCore import QPointF
+
+        from app.video.crop import FreeCrop
+
+        editor = self._editor(qt_app)
+        editor.set_crop(FreeCrop(0.25, 0.25, 0.5, 0.5))
+        editor.begin(QPointF(480, 180))         # the right edge, mid-height
+        editor.drag(QPointF(576, 180))          # pull it 96px further right
+        editor.finish()
+
+        crop = editor.crop()
+        assert crop.left == pytest.approx(0.25, abs=0.01)
+        assert crop.width == pytest.approx(0.65, abs=0.01)
+        assert crop.top == pytest.approx(0.25, abs=0.01)
+
+    def test_the_rectangle_cannot_be_dragged_out_of_the_frame(self, qt_app):
+        from PySide6.QtCore import QPointF
+
+        from app.video.crop import FreeCrop
+
+        editor = self._editor(qt_app)
+        editor.set_crop(FreeCrop(0.1, 0.1, 0.5, 0.5))
+        editor.begin(QPointF(224, 126))
+        editor.drag(QPointF(2000, 2000))        # a wild fling off the widget
+        editor.finish()
+
+        crop = editor.crop().normalised()
+        assert crop.left + crop.width <= 1.0
+        assert crop.top + crop.height <= 1.0
+
+    def test_drawing_on_the_dimmed_area_starts_a_fresh_rectangle(self, qt_app):
+        from PySide6.QtCore import QPointF
+
+        from app.video.crop import FreeCrop
+
+        editor = self._editor(qt_app)
+        editor.set_crop(FreeCrop(0.6, 0.6, 0.3, 0.3))
+        editor.begin(QPointF(64, 36))           # far outside, top-left area
+        editor.drag(QPointF(320, 180))
+        editor.finish()
+
+        crop = editor.crop()
+        assert crop.left == pytest.approx(0.1, abs=0.02)
+        assert crop.top == pytest.approx(0.1, abs=0.02)
+        assert crop.width == pytest.approx(0.4, abs=0.03)
+
+    def test_edges_cannot_cross(self, qt_app):
+        from PySide6.QtCore import QPointF
+
+        from app.video.crop import FreeCrop
+
+        editor = self._editor(qt_app)
+        editor.set_crop(FreeCrop(0.25, 0.25, 0.5, 0.5))
+        editor.begin(QPointF(480, 180))         # right edge
+        editor.drag(QPointF(0, 180))            # dragged left past the left edge
+        editor.finish()
+
+        crop = editor.crop()
+        assert crop.width >= crop.MIN_FRACTION - 1e-9
 
 
 def test_crop_changes_the_output_dimensions(qt_app, two_tone_video: Path, tmp_path: Path):
