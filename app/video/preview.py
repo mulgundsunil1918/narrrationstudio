@@ -16,6 +16,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage
 
 from app.video.captions import blend, render_caption
+from app.video.crop import CropSpec
 from app.video.style import SubtitleStyle
 
 logger = logging.getLogger(__name__)
@@ -31,25 +32,45 @@ PLACEHOLDER_TONE = 96
 
 
 def preview_frame(
-    video: Path | None, text: str, style: SubtitleStyle, target_width: int
+    video: Path | None,
+    text: str,
+    style: SubtitleStyle,
+    target_width: int,
+    crop: "CropSpec | None" = None,
+    draw_caption: bool = True,
 ) -> tuple[QImage, str]:
-    """Return a preview image and a line describing what is being shown."""
+    """Return a preview image and a line describing what is being shown.
+
+    The crop is applied before the caption is drawn — the same order as the
+    export — so the preview shows the caption at its size within the picture
+    that will actually be kept.
+    """
     frame, note = _source_frame(video)
+
+    if crop is not None:
+        x, y, crop_w, crop_h = crop.rect(frame.shape[1], frame.shape[0])
+        frame = np.ascontiguousarray(frame[y : y + crop_h, x : x + crop_w])
+        note += f" · cut to {crop_w}×{crop_h}"
     height, width = frame.shape[:2]
 
-    layer = render_caption(text, style, width, height)
-    if layer is not None:
-        blend(frame, layer)
+    if draw_caption:
+        layer = render_caption(text, style, width, height)
+        if layer is not None:
+            blend(frame, layer)
 
-    scale = target_width / width
     image = QImage(
         np.ascontiguousarray(frame).data, width, height, width * 3,
         QImage.Format.Format_RGB888,
     ).copy()
-    return (
-        image.scaledToWidth(target_width, Qt.TransformationMode.SmoothTransformation),
-        f"{note} · shown at {round(scale * 100)}% of {width}×{height}",
+    # Fit a box rather than a width: a 9:16 crop scaled to full width would be
+    # taller than the whole panel.
+    shown = image.scaled(
+        target_width, round(target_width * 0.75),
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
     )
+    scale = shown.width() / width
+    return shown, f"{note} · shown at {round(scale * 100)}% of {width}×{height}"
 
 
 def _source_frame(video: Path | None) -> tuple[np.ndarray, str]:

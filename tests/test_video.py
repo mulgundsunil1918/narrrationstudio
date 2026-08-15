@@ -188,6 +188,149 @@ def test_position_moves_the_caption(qt_app, video: Path, tmp_path: Path):
     assert top[1] < bottom[0], "top and bottom placed the caption in the same band"
 
 
+# -- cropping ------------------------------------------------------------
+
+
+@pytest.fixture
+def two_tone_video(tmp_path: Path) -> Path:
+    """Left half red, right half blue — so a crop reveals what it kept."""
+    path = tmp_path / "twotone.mp4"
+    with av.open(str(path), mode="w") as container:
+        stream = container.add_stream("libx264", rate=10)
+        stream.width, stream.height = 320, 180
+        stream.pix_fmt = "yuv420p"
+        picture = np.zeros((180, 320, 3), dtype=np.uint8)
+        picture[:, :160] = (200, 30, 30)
+        picture[:, 160:] = (30, 30, 200)
+        for index in range(20):
+            frame = av.VideoFrame.from_ndarray(picture, format="rgb24")
+            frame.pts = index
+            container.mux(stream.encode(frame))
+        container.mux(stream.encode(None))
+    return path
+
+
+class TestCropMaths:
+    from app.video.crop import CropSpec
+
+    def test_dimensions_are_always_even(self):
+        from app.video.crop import CropSpec
+
+        # 9:16 of 1080 gives 607.5 — an encoder would refuse the odd number.
+        _x, _y, w, h = CropSpec(9, 16).rect(1920, 1080)
+        assert w % 2 == 0 and h % 2 == 0
+        assert h == 1080 and w in (606, 608)
+
+    def test_square_of_landscape_cuts_the_sides(self):
+        from app.video.crop import CropSpec
+
+        x, y, w, h = CropSpec(1, 1).rect(320, 180)
+        assert (w, h) == (180, 180)
+        assert y == 0
+        assert x == 70          # centred by default
+
+    def test_pan_slides_along_the_cut_axis_and_clamps(self):
+        from app.video.crop import CropSpec
+
+        assert CropSpec(1, 1, pan=0.0).rect(320, 180)[0] == 0
+        assert CropSpec(1, 1, pan=1.0).rect(320, 180)[0] == 140
+        assert CropSpec(1, 1, pan=9.9).rect(320, 180)[0] == 140   # clamped
+
+    def test_a_wider_target_cuts_top_and_bottom_instead(self):
+        from app.video.crop import CropSpec
+
+        x, y, w, h = CropSpec(16, 9, pan=0.0).rect(180, 320)   # portrait source
+        assert w == 180
+        assert h < 320
+        assert y == 0 and x == 0
+
+    def test_same_shape_keeps_the_whole_frame(self):
+        from app.video.crop import CropSpec
+
+        assert CropSpec(16, 9).rect(1920, 1080) == (0, 0, 1920, 1080)
+
+    def test_unknown_choice_maps_to_no_crop(self):
+        from app.video.crop import crop_for
+
+        assert crop_for("original") is None
+        assert crop_for("nonsense") is None
+        assert crop_for("9:16").label == "9:16"
+
+
+def test_crop_changes_the_output_dimensions(qt_app, two_tone_video: Path, tmp_path: Path):
+    from app.video.crop import CropSpec
+
+    result = export_video(
+        VideoExportRequest(
+            video_path=two_tone_video, output_path=tmp_path / "square.mp4",
+            crop=CropSpec(1, 1),
+        )
+    )
+    assert result.reencoded
+    assert (result.width, result.height) == (180, 180)
+    picture = frame_at(result.path, 0.5)
+    assert picture.shape[:2] == (180, 180)
+
+
+def test_pan_decides_which_part_survives(qt_app, two_tone_video: Path, tmp_path: Path):
+    """Keep the left edge: the red half. Keep the right edge: the blue half."""
+    from app.video.crop import CropSpec
+
+    def dominant(pan: float, name: str) -> str:
+        result = export_video(
+            VideoExportRequest(
+                video_path=two_tone_video, output_path=tmp_path / name,
+                crop=CropSpec(1, 1, pan=pan),
+            )
+        )
+        picture = frame_at(result.path, 0.5)
+        red = (picture[:, :, 0].astype(int) - picture[:, :, 2]).mean()
+        return "red" if red > 40 else "blue" if red < -40 else "mixed"
+
+    assert dominant(0.0, "left.mp4") == "red"
+    assert dominant(1.0, "right.mp4") == "blue"
+
+
+def test_crop_and_burned_subtitles_compose(qt_app, two_tone_video: Path, tmp_path: Path):
+    """The caption must be laid out for the cropped picture, not the original."""
+    from app.video.crop import CropSpec
+
+    result = export_video(
+        VideoExportRequest(
+            video_path=two_tone_video, output_path=tmp_path / "both.mp4",
+            segments=[Segment(0, 2000, "Cropped and captioned.")],
+            burn_subtitles=True, crop=CropSpec(1, 1),
+            style=SubtitleStyle(colour="#FFD54A"),
+        )
+    )
+    assert (result.width, result.height) == (180, 180)
+    assert result.burned_captions == 1
+
+    picture = frame_at(result.path, 0.5)
+    assert picture.shape[:2] == (180, 180)
+    yellow = ((picture[:, :, 0] > 170) & (picture[:, :, 1] > 140)
+              & (picture[:, :, 2] < 130)).sum()
+    assert yellow > 20, "the caption did not survive the crop"
+
+
+def test_crop_alone_does_not_burn_captions(qt_app, two_tone_video: Path, tmp_path: Path):
+    """Re-encoding for a crop must not drag subtitles in uninvited."""
+    from app.video.crop import CropSpec
+
+    result = export_video(
+        VideoExportRequest(
+            video_path=two_tone_video, output_path=tmp_path / "clean.mp4",
+            segments=[Segment(0, 2000, "Should not appear.")],
+            crop=CropSpec(1, 1), style=SubtitleStyle(colour="#FFD54A"),
+        )
+    )
+    assert result.burned_captions == 0
+    picture = frame_at(result.path, 0.5)
+    yellow = ((picture[:, :, 0] > 170) & (picture[:, :, 1] > 140)
+              & (picture[:, :, 2] < 130)).sum()
+    assert yellow == 0, "captions were burned in without being asked for"
+
+
 # -- failures ------------------------------------------------------------
 
 

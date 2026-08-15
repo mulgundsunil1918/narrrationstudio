@@ -71,6 +71,7 @@ class VideoPanel(Card):
         )
 
         self.add(self._build_source())
+        self.add(self._build_crop())
         self.add(self._build_subtitle_mode())
         self._style_panel = self._build_style()
         self.add(self._style_panel)
@@ -107,6 +108,60 @@ class VideoPanel(Card):
             self._state.media_path = self._video
             self._refresh()
 
+    # -- crop ------------------------------------------------------------
+
+    def _build_crop(self) -> QWidget:
+        from app.video.crop import CROP_CHOICES
+
+        holder = QWidget()
+        column = QVBoxLayout(holder)
+        column.setContentsMargins(0, 12, 0, 0)
+        column.setSpacing(7)
+        column.addWidget(label("Shape", "Muted"))
+
+        self._crop_choice = Segmented(
+            [(key, label_text) for key, label_text, _aspect in CROP_CHOICES],
+            initial="original",
+        )
+        self._crop_choice.changed.connect(self._on_crop)
+        column.addWidget(self._crop_choice)
+
+        # Which slice survives the cut. A screen recording's action is rarely
+        # dead centre, so keeping only the middle would crop the wrong thing.
+        self._pan = LabeledSlider("Which part to keep", 0, 100, 50, suffix="%")
+        self._pan.valueChanged.connect(lambda _v: self._on_crop(self._crop_choice.current()))
+        self._pan.setVisible(False)
+        column.addWidget(self._pan)
+
+        self._crop_note = caption("", wrap=True)
+        column.addWidget(self._crop_note)
+        return holder
+
+    def _current_crop(self):
+        from app.video.crop import crop_for
+
+        if self._crop_choice.current() == "original":
+            return None
+        return crop_for(self._crop_choice.current(), self._pan.value() / 100)
+
+    def _on_crop(self, key: str) -> None:
+        self._pan.setVisible(key != "original")
+        notes = {
+            "original": "",
+            "9:16": "Tall, for Reels, Shorts and WhatsApp status. The sides are "
+                    "cut away — the slider picks which part stays.",
+            "1:1": "Square, for feeds. The sides are cut away — the slider "
+                   "picks which part stays.",
+            "4:3": "The classic screen shape.",
+            "16:9": "Standard widescreen, for YouTube and presentations.",
+        }
+        note = notes.get(key, "")
+        if key != "original":
+            note += " Reshaping re-encodes the video, so it takes longer."
+        self._crop_note.setText(note)
+        self._update_preview_visibility()
+        self._redraw_preview()
+
     # -- subtitles -------------------------------------------------------
 
     def _build_subtitle_mode(self) -> QWidget:
@@ -133,10 +188,14 @@ class VideoPanel(Card):
 
     def _on_mode(self, key: str) -> None:
         self._style_panel.setVisible(key == "burn")
-        self._preview_holder.setVisible(key == "burn")
+        self._update_preview_visibility()
         self._describe_mode()
-        if key == "burn":
-            self._redraw_preview()
+        self._redraw_preview()
+
+    def _update_preview_visibility(self) -> None:
+        """The preview earns its space whenever the picture will change."""
+        show = self._mode.current() == "burn" or self._current_crop() is not None
+        self._preview_holder.setVisible(show)
 
     def _describe_mode(self) -> None:
         notes = {
@@ -304,13 +363,15 @@ class VideoPanel(Card):
         return self._preview_holder
 
     def _redraw_preview(self) -> None:
-        """Draw a real frame of the user's video with their own caption on it.
+        """Draw a real frame of the user's video, cropped and captioned as asked.
 
-        Keyed off the chosen mode, not the widget's visibility: a widget inside
-        a parent that has not been shown yet reports itself invisible, and the
-        preview would then stay blank until something else happened to redraw it.
+        Keyed off the chosen options, not the widget's visibility: a widget
+        inside a parent that has not been shown yet reports itself invisible,
+        and the preview would then stay blank until something else redrew it.
         """
-        if self._mode.current() != "burn":
+        crop = self._current_crop()
+        burn = self._mode.current() == "burn"
+        if not burn and crop is None:
             return
         from app.video.preview import preview_frame
 
@@ -319,7 +380,10 @@ class VideoPanel(Card):
             "Your subtitles will look like this.",
         )
         try:
-            image, note = preview_frame(self._video, text, self._style, PREVIEW_WIDTH)
+            image, note = preview_frame(
+                self._video, text, self._style, PREVIEW_WIDTH,
+                crop=crop, draw_caption=burn,
+            )
         except Exception as exc:
             logger.warning("Preview failed: %s", exc)
             self._preview.setText("The preview could not be drawn.")
@@ -369,6 +433,7 @@ class VideoPanel(Card):
                 sidecar_subtitles=mode == "sidecar",
                 burn_subtitles=mode == "burn",
                 style=self._style,
+                crop=self._current_crop(),
             )
         )
 

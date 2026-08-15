@@ -25,6 +25,7 @@ import numpy as np
 from app.core.errors import AudioError, StudioError
 from app.core.models import Segment
 from app.video.captions import CaptionLayer, blend, render_caption
+from app.video.crop import CropSpec
 from app.video.style import SubtitleStyle
 
 logger = logging.getLogger(__name__)
@@ -51,11 +52,14 @@ class VideoExportRequest:
     #: Painted into the picture. Requires re-encoding the video.
     burn_subtitles: bool = False
     style: SubtitleStyle = field(default_factory=SubtitleStyle)
+    #: Cut the picture to a new shape. Also requires re-encoding — a crop that
+    #: kept the original bitstream would be no crop at all.
+    crop: "CropSpec | None" = None
     crf: int = DEFAULT_CRF
 
     @property
     def needs_reencode(self) -> bool:
-        return self.burn_subtitles
+        return self.burn_subtitles or self.crop is not None
 
 
 @dataclass
@@ -253,19 +257,33 @@ def _export_reencoded(
         video_in = source.streams.video[0]
         width = video_in.codec_context.width
         height = video_in.codec_context.height
-        result.width, result.height = width, height
         total = float(source.duration or 0) / av.time_base or 0.0
 
-        if on_progress:
-            on_progress(None, "Preparing the subtitles…")
-        layers = _prepare_layers(request, width, height)
+        # The crop is resolved once against the real dimensions; everything
+        # downstream — output size, caption layout — works in the cropped frame.
+        crop_rect = request.crop.rect(width, height) if request.crop else None
+        if crop_rect:
+            out_w, out_h = crop_rect[2], crop_rect[3]
+        else:
+            out_w, out_h = width, height
+        result.width, result.height = out_w, out_h
+
+        layers: list[tuple[int, int, CaptionLayer]] = []
+        if request.burn_subtitles:
+            if on_progress:
+                on_progress(None, "Preparing the subtitles…")
+            # Captions are laid out for the *cropped* picture, so their size and
+            # margins are honest percentages of what the viewer will see.
+            layers = _prepare_layers(request, out_w, out_h)
         result.burned_captions = len(layers)
+
+        doing = "Adding subtitles to" if layers else "Reshaping"
 
         with av.open(str(working), mode="w", format=container_format(request.output_path)) as output:
             rate = video_in.average_rate or 30
             video_out = output.add_stream("libx264", rate=rate)
-            video_out.width = width
-            video_out.height = height
+            video_out.width = out_w
+            video_out.height = out_h
             video_out.pix_fmt = "yuv420p"
             video_out.options = {"crf": str(request.crf), "preset": "medium"}
 
@@ -277,6 +295,12 @@ def _export_reencoded(
                     return None
                 seconds = float(frame.pts * video_in.time_base) if frame.pts else 0.0
                 picture = frame.to_ndarray(format="rgb24")
+
+                if crop_rect:
+                    x, y, crop_w, crop_h = crop_rect
+                    picture = np.ascontiguousarray(
+                        picture[y : y + crop_h, x : x + crop_w]
+                    )
 
                 for start, end, layer in layers:
                     if start <= seconds * 1000 < end:
@@ -292,7 +316,7 @@ def _export_reencoded(
                 if on_progress and total and frames % 15 == 0:
                     on_progress(
                         min(0.95, seconds / total),
-                        f"Adding subtitles to the picture… frame {frames}",
+                        f"{doing} the picture… frame {frames}",
                     )
             output.mux(video_out.encode(None))
 
