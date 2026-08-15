@@ -66,6 +66,11 @@ cat > "$BUNDLE/Contents/Info.plist" <<PLIST
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>LSMinimumSystemVersion</key><string>12.0</string>
+    <!-- Belt and braces against a second copy. It is not sufficient on its own:
+         the launcher hands over to the Python framework's own bundle, so
+         LaunchServices does not recognise the running process as this app. The
+         app guards itself in app/ui/single_instance.py. -->
+    <key>LSMultipleInstancesProhibited</key><true/>
     <key>NSHumanReadableCopyright</key><string>Runs entirely on this Mac.</string>
     <key>CFBundleDocumentTypes</key>
     <array>
@@ -107,20 +112,53 @@ dialog() {  # title, message
     /usr/bin/osascript -e "display dialog \"$2\" with title \"$1\" buttons {\"OK\"} default button 1" >/dev/null 2>&1
 }
 
+usable() {  # a real Python 3.12+ at this exact path
+    [ -x "$1" ] || return 1
+    "$1" -c 'import sys; sys.exit(0 if sys.version_info >= (3,12) else 1)' 2>/dev/null
+}
+
 find_python() {
-    for candidate in python3.12 python3.13 python3; do
-        if command -v "$candidate" >/dev/null 2>&1; then
-            if "$candidate" -c 'import sys; sys.exit(0 if sys.version_info >= (3,12) else 1)' 2>/dev/null; then
-                command -v "$candidate"; return 0
-            fi
-        fi
+    # Absolute paths first, and deliberately so. An app launched from Finder
+    # gets PATH=/usr/bin:/bin:/usr/sbin:/sbin — no /usr/local/bin, no Homebrew,
+    # no python.org framework — and the only python3 on it is macOS's own 3.9.
+    # Searching PATH alone therefore told people to install a Python they had
+    # already installed.
+    # 3.12 first, and that order matters: torch 2.2.2 publishes no wheels past
+    # cp312, so building the runtime on a newer Python installs nothing and
+    # leaves the user staring at a wall of pip errors. Newer versions are still
+    # tried, but only when 3.12 is genuinely absent.
+    for version in 3.12 3.13 3.14; do
+        for candidate in \
+            "/Library/Frameworks/Python.framework/Versions/$version/bin/python$version" \
+            "/opt/homebrew/opt/python@$version/bin/python$version" \
+            "/opt/homebrew/bin/python$version" \
+            "/usr/local/opt/python@$version/bin/python$version" \
+            "/usr/local/bin/python$version" \
+            "$HOME/.pyenv/versions/$version"*/bin/python3
+        do
+            if usable "$candidate"; then echo "$candidate"; return 0; fi
+        done
+    done
+
+    for candidate in \
+        "/Library/Frameworks/Python.framework/Versions/Current/bin/python3" \
+        "/opt/homebrew/bin/python3" \
+        "/usr/local/bin/python3"
+    do
+        if usable "$candidate"; then echo "$candidate"; return 0; fi
+    done
+
+    # Only now fall back to whatever the environment offers.
+    for name in python3.12 python3.13 python3.14 python3; do
+        resolved="$(command -v "$name" 2>/dev/null)" || continue
+        if usable "$resolved"; then echo "$resolved"; return 0; fi
     done
     return 1
 }
 
 if [ "$HAVE" != "$WANTED" ] || [ ! -x "$PYTHON" ]; then
     HOST_PYTHON="$(find_python)" || {
-        dialog "Narration Studio" "Python 3.12 or newer is required.\n\nInstall it from python.org or with:  brew install python@3.12\n\nThen open Narration Studio again."
+        dialog "Narration Studio" "Python 3.12 or newer is needed, and none was found on this Mac.\n\nDownload it from python.org/downloads, run the installer, then open Narration Studio again.\n\n(If you believe you already have it, it may be installed somewhere unusual — open the app from Terminal to see the search.)"
         exit 1
     }
 
@@ -137,15 +175,30 @@ if [ "$HAVE" != "$WANTED" ] || [ ! -x "$PYTHON" ]; then
     SETUP="$SUPPORT/first-run-setup.sh"
     cat > "$SETUP" <<SETUP_EOF
 #!/usr/bin/env bash
-set -e
 echo ""
 echo "Narration Studio — $HEADLINE"
 echo "-----------------------------------"
 echo "$EXPLAIN"
 echo ""
-[ -x "$PYTHON" ] || "$HOST_PYTHON" -m venv "$RUNTIME"
+
+# The stamp is written only after everything succeeded. A half-built runtime
+# with a stamp on it would look installed and then fail on every launch.
+fail() {
+    echo ""
+    echo "Setup did not finish: \$1"
+    echo ""
+    echo "Nothing is broken — opening Narration Studio again will retry."
+    echo "Press Return to close this window."
+    read -r _
+    exit 1
+}
+
+if [ ! -x "$PYTHON" ]; then
+    "$HOST_PYTHON" -m venv "$RUNTIME" || fail "the Python environment could not be created."
+fi
 "$RUNTIME/bin/python" -m pip install --upgrade pip --quiet
-"$RUNTIME/bin/python" -m pip install -r "$RES/requirements.txt"
+"$RUNTIME/bin/python" -m pip install -r "$RES/requirements.txt" \
+    || fail "some components could not be downloaded. Check your internet connection."
 printf '%s' "$WANTED" > "$STAMP"
 echo ""
 echo "Ready. Opening Narration Studio…"

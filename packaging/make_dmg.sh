@@ -42,6 +42,11 @@ Narration Studio
 
 To install:  drag "Narration Studio" onto the Applications folder.
 
+Then eject this disk image — drag it to the Bin, or click the eject arrow
+beside it in Finder. Until you do, there are two copies of the app on your
+Mac: the installed one and the one still sitting in this window. Opening the
+wrong one is the usual reason people think the app has opened twice.
+
 First launch
 ------------
 macOS will say the app is from an unidentified developer, because it is not

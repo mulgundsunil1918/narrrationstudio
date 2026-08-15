@@ -61,6 +61,18 @@ def main(argv: list[str] | None = None) -> int:
     application.setApplicationName(APP_NAME)
     application.setOrganizationName(APP_NAME)
 
+    arguments = (argv if argv is not None else sys.argv)[1:]
+
+    # Before building anything: if a copy is already running, give it whatever
+    # this launch was asked to open and get out of the way. macOS cannot do this
+    # for us here — see app.ui.single_instance.
+    from app.ui.single_instance import SingleInstance
+
+    guard = SingleInstance()
+    if guard.hand_over(arguments):
+        return 0
+    guard.listen()
+
     from app.ui.main_window import MainWindow
     from app.ui.state import AppState
     from app.ui.theme import Appearance, apply_theme
@@ -83,20 +95,33 @@ def main(argv: list[str] | None = None) -> int:
 
     window.show()
 
-    # Open a file passed on the command line, e.g. from "Open With".
-    arguments = (argv if argv is not None else sys.argv)[1:]
-    if arguments:
+    def open_arguments(items: list[str]) -> None:
+        """Open a file passed on the command line, e.g. from "Open With"."""
+        if not items:
+            return
         from pathlib import Path
 
         from app.ui.widgets.dropzone import classify
 
-        path = Path(arguments[0])
-        if path.exists():
-            kind = classify(path)
-            if kind == "project":
-                window.open_project(path)
-            elif kind != "unsupported":
-                window.import_file(path, kind)
+        path = Path(items[0])
+        if not path.exists():
+            return
+        kind = classify(path)
+        if kind == "project":
+            window.open_project(path)
+        elif kind != "unsupported":
+            window.import_file(path, kind)
+
+    def on_second_launch(items: list[str]) -> None:
+        """Someone clicked the icon again: surface this window rather than a new one."""
+        window.show()
+        window.raise_()
+        window.activateWindow()
+        open_arguments(items)
+
+    guard.activated.connect(on_second_launch)
+    application.aboutToQuit.connect(guard.close)
+    open_arguments(arguments)
 
     return application.exec()
 
