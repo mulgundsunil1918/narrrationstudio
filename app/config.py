@@ -101,6 +101,8 @@ class Settings:
     recent_voices: list[str] = field(default_factory=list)
     verbose_logging: bool = False
     window_geometry: str = ""
+    #: "dark" or "light" — the Appearance enum's value, stored as its string.
+    appearance: str = "dark"
 
     @classmethod
     def load(cls) -> "Settings":

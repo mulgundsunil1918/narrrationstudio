@@ -286,7 +286,20 @@ def _export_reencoded(
             video_out.width = out_w
             video_out.height = out_h
             video_out.pix_fmt = "yuv420p"
-            video_out.options = {"crf": str(request.crf), "preset": "medium"}
+            # veryfast, not medium: at CRF 18 the difference is file size, not
+            # anything visible, and a phone-resolution re-encode at medium is
+            # minutes of "0%" that read as a hang.
+            video_out.options = {"crf": str(request.crf), "preset": "veryfast"}
+            # Phone recordings are variable-frame-rate: their "rate" is a
+            # fraction like 140490000/4917011, and an encoder ticking at that
+            # rate makes neighbouring source timestamps collide when rescaled —
+            # frames 0ms and 8ms apart both land on tick 0, the muxer rejects
+            # the duplicate ("Invalid argument", errno 22), and the export
+            # dies. Both clocks must be the source's own: the codec context is
+            # the one the encoder actually stamps packets with, and setting
+            # only the stream's was not enough.
+            video_out.codec_context.time_base = video_in.time_base
+            video_out.time_base = video_in.time_base
 
             audio_out, resampler = _prepare_audio(av, output, request)
 

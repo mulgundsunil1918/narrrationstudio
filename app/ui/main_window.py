@@ -693,11 +693,16 @@ class MainWindow(QMainWindow):
         self._finish_preview()
         self.show_error(error)
 
-    def set_appearance(self, appearance: Appearance) -> None:
+    def set_appearance(self, appearance: Appearance | str) -> None:
+        # Qt's itemData round trip flattens the str-enum to a plain string.
+        appearance = Appearance(appearance)
         application = QApplication.instance()
         if application is not None:
             apply_theme(application, appearance)
             self._toast_message(f"{appearance.value.title()} appearance", "info")
+        # Remembered, so the app opens the way it was left.
+        self.state.settings.appearance = appearance.value
+        self.state.settings.save()
 
     # -- errors ----------------------------------------------------------
 

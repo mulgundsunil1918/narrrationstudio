@@ -480,6 +480,65 @@ def test_crop_alone_does_not_burn_captions(qt_app, two_tone_video: Path, tmp_pat
     assert yellow == 0, "captions were burned in without being asked for"
 
 
+@pytest.fixture
+def vfr_video(tmp_path: Path) -> Path:
+    """A variable-frame-rate video, the shape every phone recording arrives in.
+
+    Its frames sit at irregular 90 kHz timestamps and its average_rate is an
+    awkward fraction — exactly the file that made the re-encode die with
+    "Invalid argument" when the encoder ticked at that fraction: neighbouring
+    timestamps collided into the same coarse tick and the muxer refused the
+    duplicate.
+    """
+    from fractions import Fraction
+
+    path = tmp_path / "vfr.mp4"
+    with av.open(str(path), mode="w") as container:
+        stream = container.add_stream("libx264", rate=30)
+        stream.width, stream.height = 320, 180
+        stream.pix_fmt = "yuv420p"
+        stream.codec_context.time_base = Fraction(1, 90_000)
+        stream.time_base = Fraction(1, 90_000)
+        picture = np.zeros((180, 320, 3), dtype=np.uint8)
+        picture[:, :] = (10, 20, 60)
+        # Deliberately uneven spacing, like a phone under load: some frames
+        # 8 ms apart, some 58 ms.
+        pts = 0
+        for index in range(60):
+            frame = av.VideoFrame.from_ndarray(picture, format="rgb24")
+            frame.pts = pts
+            frame.time_base = Fraction(1, 90_000)
+            container.mux(stream.encode(frame))
+            pts += 717 if index % 3 else 5261
+        container.mux(stream.encode(None))
+    return path
+
+
+def test_a_variable_frame_rate_phone_video_survives_reencoding(
+    qt_app, vfr_video: Path, tmp_path: Path
+):
+    """Crop + burn on a VFR source: the exact export that failed in the field."""
+    from app.video.crop import FreeCrop
+
+    result = export_video(
+        VideoExportRequest(
+            video_path=vfr_video, output_path=tmp_path / "vfr_out.mp4",
+            segments=[Segment(0, 2000, "It's 3 a.m.")],
+            burn_subtitles=True, crop=FreeCrop(0.0, 0.02, 0.99, 0.96),
+            style=SubtitleStyle(colour="#FFD54A"),
+        )
+    )
+    assert result.reencoded
+    assert result.burned_captions == 1
+
+    with av.open(str(result.path)) as container:
+        stream = container.streams.video[0]
+        stamps = [frame.pts for frame in container.decode(stream)]
+    assert len(stamps) >= 55, "frames were lost in the re-encode"
+    assert stamps == sorted(stamps), "timestamps came out non-monotonic"
+    assert len(set(stamps)) == len(stamps), "timestamps collided"
+
+
 # -- failures ------------------------------------------------------------
 
 

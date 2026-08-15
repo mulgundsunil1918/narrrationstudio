@@ -74,9 +74,17 @@ class SettingsScreen(QScrollArea):
         row.addWidget(label("Appearance", "Body"))
         row.addStretch(1)
         self._appearance = QComboBox()
-        self._appearance.addItem("Dark", Appearance.DARK)
-        self._appearance.addItem("Light", Appearance.LIGHT)
+        # Plain string values, deliberately: Qt's itemData round trip flattens
+        # a str-based enum to a string anyway, and pretending otherwise is how
+        # choosing Dark once applied the light palette.
+        self._appearance.addItem("Dark", Appearance.DARK.value)
+        self._appearance.addItem("Light", Appearance.LIGHT.value)
         self._appearance.setFixedWidth(160)
+        # Show the saved choice, without announcing it as a change.
+        saved = self._state.settings.appearance
+        self._appearance.setCurrentIndex(
+            max(0, self._appearance.findData(saved))
+        )
         self._appearance.currentIndexChanged.connect(
             lambda i: self.appearance_changed.emit(self._appearance.itemData(i))
         )

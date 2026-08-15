@@ -77,7 +77,15 @@ def main(argv: list[str] | None = None) -> int:
     from app.ui.state import AppState
     from app.ui.theme import Appearance, apply_theme
 
-    apply_theme(application, Appearance.DARK)
+    # Open with the appearance the app was left in; anything unreadable in the
+    # settings file must not stop the app from starting.
+    try:
+        from app.config import Settings as _Settings
+
+        saved = Appearance(_Settings.load().appearance)
+    except Exception:
+        saved = Appearance.DARK
+    apply_theme(application, saved)
 
     state = AppState()
     window = MainWindow(state)

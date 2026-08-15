@@ -115,8 +115,16 @@ def palette() -> Palette:
     return _current
 
 
-def set_appearance(appearance: Appearance) -> Palette:
+def set_appearance(appearance: Appearance | str) -> Palette:
+    """Switch the palette. Accepts the enum or its plain string value.
+
+    The string matters: this arrives from a QComboBox's itemData, and Qt's
+    round trip flattens a str-based enum into an ordinary "dark"/"light". The
+    old identity check ("dark" is Appearance.DARK, always False) then applied
+    the LIGHT palette whichever appearance was chosen.
+    """
     global _current
+    appearance = Appearance(appearance)
     _current = DARK if appearance is Appearance.DARK else LIGHT
     return _current
 
