@@ -189,6 +189,7 @@ class MainWindow(QMainWindow):
         self.home.open_project.connect(self.open_project)
         self.home.rejected.connect(self._on_rejected_file)
         self.script.request_enhance.connect(self.show_enhance)
+        self.script.request_polish.connect(self.show_polish)
         self.voice.preview_requested.connect(self.preview_voice)
         self.generate.finished.connect(lambda _o: self.go("review"))
         self.generate.change_voice_requested.connect(lambda: self.go("voice"))
@@ -590,6 +591,17 @@ class MainWindow(QMainWindow):
             self._toast_message("Import a script first.", "warning")
             return
         EnhanceDialog(self.state, self).exec()
+
+    def show_polish(self) -> None:
+        """The round trip: save the script out, polish it in an AI, load it back."""
+        if not self.state.has_captions:
+            self._toast_message("Import a script first.", "warning")
+            return
+        from app.ui.screens.polish_dialog import PolishDialog
+
+        dialog = PolishDialog(self.state, self)
+        dialog.exec()
+        dialog.deleteLater()
 
     def _generate_now(self) -> None:
         self.go("generate")

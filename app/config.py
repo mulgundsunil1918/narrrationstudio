@@ -32,8 +32,18 @@ VOICE_PREVIEW_TEXT = (
 )
 
 
+#: Redirects every per-user directory somewhere else. Set it to run against a
+#: throwaway location — which the test suite does, so a test run can never read
+#: or overwrite somebody's real projects, settings or recovery file.
+DATA_DIR_ENV = "NARRATION_STUDIO_DATA_DIR"
+
+
 def _base_dir(kind: str) -> Path:
     """Return a per-user directory for ``kind`` in ("support", "cache", "logs")."""
+    override = os.environ.get(DATA_DIR_ENV)
+    if override:
+        return Path(override).expanduser() / kind
+
     from app.utils.platform import data_root
 
     return data_root(APP_NAME, APP_ID, kind)

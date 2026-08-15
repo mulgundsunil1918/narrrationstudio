@@ -203,6 +203,7 @@ class ScriptScreen(QWidget):
     """The transcript editor plus its toolbar."""
 
     request_enhance = Signal()
+    request_polish = Signal()
     continue_pressed = Signal()
 
     def __init__(self, state: AppState, parent: QWidget | None = None) -> None:
@@ -250,10 +251,23 @@ class ScriptScreen(QWidget):
         row.addWidget(self._undo)
         row.addWidget(self._redo)
 
-        enhance = SecondaryButton("Enhance Script…")
-        enhance.setToolTip("Fix spelling, punctuation and brand terms — timings unchanged")
+        enhance = GhostButton("Fix My Terms…")
+        enhance.setToolTip(
+            "Apply your own find-and-replace rules for names and jargon — "
+            "instant, and stays on this Mac"
+        )
         enhance.clicked.connect(self.request_enhance)
         row.addWidget(enhance)
+
+        # The AI round trip is the one that fixes wording and punctuation, which
+        # is what most transcripts actually need, so it leads.
+        polish = SecondaryButton("Polish with AI…")
+        polish.setToolTip(
+            "Send the script to ChatGPT to be tidied, then bring it back — "
+            "your timings are kept whatever it returns"
+        )
+        polish.clicked.connect(self.request_polish)
+        row.addWidget(polish)
         return bar
 
     def _build_scroller(self) -> QWidget:
