@@ -164,13 +164,16 @@ WORKFLOW_STEPS: tuple[tuple[str, str, str], ...] = (
     ),
     (
         "2",
-        "Ask ChatGPT for a subtitle file (.srt)",
-        "Upload your video to ChatGPT and ask it to generate an .srt subtitle file "
-        "with timings.",
+        "Get the words out, with their timings",
+        "Quickest free route: upload the video to YouTube as unlisted, let it add "
+        "subtitles automatically, then download them as .srt. Most editors do it "
+        "too — CapCut, DaVinci Resolve, Premiere Pro and Kdenlive all have "
+        "automatic captions you can export. ChatGPT cannot do this part; it reads "
+        "text, not audio.",
     ),
     (
         "3",
-        "Clean up the subtitle text in ChatGPT",
+        "Tidy up the words in ChatGPT",
         "Speech-to-text mis-hears names and punctuates badly, which is what makes "
         "narration sound wrong. Paste the prompt below with your .srt — it fixes "
         "the wording while keeping every timestamp identical.",
