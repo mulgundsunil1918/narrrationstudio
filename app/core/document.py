@@ -194,6 +194,47 @@ class SubtitleDocument:
         self._commit("Adjust timing", segments)
         return 1
 
+    def apply_time_map(
+        self, times: dict[int, tuple[int, int]], label: str = "Retime captions"
+    ) -> int:
+        """Move many subtitle windows in one undoable step.
+
+        Used by retiming, where every boundary moves together — as individual
+        ``set_times`` calls the intermediate states would overlap and fail
+        validation, and Undo would take dozens of presses to escape.
+        """
+        segments = self._snapshot()
+        changed = 0
+        for index, (start_ms, end_ms) in times.items():
+            current = segments[index]
+            start_ms, end_ms = int(start_ms), int(end_ms)
+            if start_ms < 0:
+                raise DocumentError("A subtitle cannot start before 00:00:00.000.")
+            if end_ms - start_ms < MIN_SEGMENT_MS:
+                raise DocumentError(
+                    f"Subtitle {index + 1} would be {end_ms - start_ms} ms long; "
+                    f"the minimum is {MIN_SEGMENT_MS} ms."
+                )
+            if (start_ms, end_ms) == (current.start_ms, current.end_ms):
+                continue
+            segments[index] = replace(
+                current, start_ms=start_ms, end_ms=end_ms,
+                status=SegmentStatus.NEEDS_REGEN
+                if current.status == SegmentStatus.GENERATED
+                else current.status,
+            )
+            changed += 1
+
+        if changed:
+            ordered = sorted(segments, key=lambda s: (s.start_ms, s.end_ms))
+            for earlier, later in zip(ordered, ordered[1:]):
+                if later.start_ms < earlier.end_ms:
+                    raise DocumentError(
+                        "That retiming would make two subtitles overlap."
+                    )
+            self._commit(label, segments)
+        return changed
+
     def set_status(self, index: int, status: SegmentStatus) -> int:
         """Update status without creating an undo entry (generation bookkeeping)."""
         segments = self._stack.state

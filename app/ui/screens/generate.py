@@ -83,6 +83,7 @@ class GenerateScreen(QWidget):
 
         self._column.addWidget(self._build_preflight())
         self._column.addWidget(self._build_progress())
+        self._column.addWidget(self._build_retime())
         self._column.addWidget(self._build_issues())
         self._scroll.setWidget(holder)
         outer.addWidget(self._scroll, 1)
@@ -198,6 +199,22 @@ class GenerateScreen(QWidget):
         self.waveform.setVisible(False)
         self._progress_card.add(self.waveform)
         return self._progress_card
+
+    def _build_retime(self) -> QWidget:
+        """Offered after generation when the timings audibly fought the voice."""
+        self._retime_card = Card()
+        self._retime_card.setVisible(False)
+        self._retime_card.add(section_label("Pacing"))
+        self._retime_note = muted("", wrap=True)
+        self._retime_card.add(self._retime_note)
+
+        row = QHBoxLayout()
+        row.addStretch(1)
+        self._retime_button = SecondaryButton("Fit the Timings to the Voice…")
+        self._retime_button.clicked.connect(self.retime_to_voice)
+        row.addWidget(self._retime_button)
+        self._retime_card.add_layout(row)
+        return self._retime_card
 
     def _build_issues(self) -> QWidget:
         self._issues_card = Card()
@@ -315,6 +332,7 @@ class GenerateScreen(QWidget):
 
         self._progress_card.setVisible(True)
         self._issues_card.setVisible(False)
+        self._retime_card.setVisible(False)
         self._generate.setEnabled(False)
         self._recheck.setEnabled(False)
         self._cancel.setEnabled(True)
@@ -451,7 +469,87 @@ class GenerateScreen(QWidget):
             self._state_pill.set_status("Completed", "success")
 
         self._state.set_outcome(outcome)
+        self._offer_retime(outcome)
         self.finished.emit(outcome)
+
+    # -- retiming ---------------------------------------------------------
+
+    def _offer_retime(self, outcome: GenerationOutcome) -> None:
+        """Show the retime card when the timings audibly fought the voice."""
+        aligned = (
+            not outcome.failures
+            and len(outcome.fit_plans) == len(outcome.plan.groups) > 0
+        )
+        if not aligned:
+            self._retime_card.setVisible(False)
+            return
+
+        worst = max(
+            abs(fp.generated_ms - fp.target_ms) / max(1, fp.target_ms)
+            for fp in outcome.fit_plans
+        )
+        self._retime_card.setVisible(worst > 0.10)
+        if worst > 0.10:
+            self._retime_note.setText(
+                "Some sections have far more or less to say than their timings "
+                "allow, which is what makes the voice speed up and slow down. "
+                "This moves the caption timings to fit the voice instead — the "
+                "total length stays the same, captions stay in order, and most "
+                "barely move. It can be undone."
+            )
+
+    def retime_to_voice(self) -> None:
+        outcome = self._state.outcome
+        if outcome is None or outcome.failures:
+            self._state.report("Generate the narration first.", "warning")
+            return
+        if len(outcome.fit_plans) != len(outcome.plan.groups):
+            self._state.report(
+                "Retiming needs a complete generation to measure from.", "warning"
+            )
+            return
+
+        from app.narration.retime import plan_retime
+
+        speech = [plan.generated_ms for plan in outcome.fit_plans]
+        retime = plan_retime(self._state.segments, outcome.plan, speech)
+        if not retime.is_worthwhile:
+            self._state.report("The timings already fit the voice.", "info")
+            self._retime_card.setVisible(False)
+            return
+
+        from PySide6.QtWidgets import QMessageBox
+
+        summary = (
+            f"{retime.moved_groups} of {len(outcome.plan.groups)} sections will "
+            f"move; the largest shift is {retime.max_shift_ms / 1000:.1f}s. The "
+            "total length is unchanged and captions stay in order.\n\n"
+            "The narration will be regenerated to match — quick, because the "
+            "speech is cached. You can Undo afterwards."
+        )
+        if retime.notes:
+            summary = "\n".join(retime.notes) + "\n\n" + summary
+        answer = QMessageBox.question(
+            self, "Fit the timings to the voice?", summary,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            changed = self._state.document.apply_time_map(
+                retime.as_time_map(), "Fit timings to the voice"
+            )
+        except Exception as exc:
+            self._state.report(f"The timings could not be moved: {exc}", "error")
+            return
+
+        self._retime_card.setVisible(False)
+        self._state.report(
+            f"Moved {changed} caption(s) to fit the voice. Regenerating…",
+            "success",
+        )
+        self.start()
 
     def _on_failed(self, error: OperationError) -> None:
         self._stop_timers()

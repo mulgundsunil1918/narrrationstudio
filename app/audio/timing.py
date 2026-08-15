@@ -67,6 +67,11 @@ class FitOptions:
     #: far better than rushing the sentence to the caption boundary. 0 keeps
     #: the boundary exact; the captions themselves are never moved either way.
     gap_borrow_fraction: float = 0.0
+    #: When speech is far shorter than its window, leave quiet rather than
+    #: drawl: the stretch stops at ``min_stretch_factor`` and the remainder is
+    #: silence. Off, the old behaviour stretches down to the hard floor first —
+    #: right for exact sync, and audibly draggy everywhere else.
+    prefer_pad_over_stretch: bool = False
 
 
 #: Ready-made pacing choices, from strict sync to natural delivery.
@@ -83,12 +88,14 @@ PACING_PRESETS: dict[str, FitOptions] = {
         min_stretch_factor=0.95,
         hard_min_stretch_factor=0.88,
         gap_borrow_fraction=0.65,
+        prefer_pad_over_stretch=True,
     ),
     "natural": FitOptions(
         min_stretch_factor=0.98,
         hard_min_stretch_factor=0.97,
         gap_borrow_fraction=0.90,
         max_trailing_silence_ms=1500,
+        prefer_pad_over_stretch=True,
     ),
 }
 
@@ -267,11 +274,12 @@ def _plan_fill(generated_ms: int, target_ms: int, options: FitOptions) -> FitPla
 
     exact_factor = generated_ms / target_ms  # < 1
 
-    # Stretching to fill is preferred over padding at every step. A group's
-    # window is a speech window, not a slot to pour silence into: dead air in
-    # the middle of a sentence is far more damaging than speech running slow.
     if exact_factor >= options.min_stretch_factor:
         factor = exact_factor              # comfortable: fill it exactly
+    elif options.prefer_pad_over_stretch:
+        # Quiet over drawl: bend the voice a few percent at most, and let the
+        # rest of the window be the silence the timings asked for.
+        factor = options.min_stretch_factor
     elif exact_factor >= options.hard_min_stretch_factor:
         factor = exact_factor              # slow, but still better than a hole
     else:
