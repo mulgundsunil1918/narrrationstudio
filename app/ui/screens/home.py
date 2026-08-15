@@ -109,10 +109,12 @@ class HomeScreen(QScrollArea):
         card.add(heading("How this works"))
         card.add(
             muted(
-                "This app replaces the voice on a video you have already made. It "
-                "reads your subtitle file, speaks the words with a voice you pick, "
-                "and lines the audio up exactly with your original timings — so the "
-                "narration still matches what is on screen.",
+                "This app replaces the voice on a video you have already made. Drop "
+                "the video in and it will listen to it and write the script for you, "
+                "or bring your own script if the video is silent. Either way it "
+                "speaks the words with a voice you pick and lines the audio up "
+                "exactly with the original timings — so the narration still matches "
+                "what is on screen.",
                 wrap=True,
             )
         )

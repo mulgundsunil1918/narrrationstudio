@@ -155,6 +155,9 @@ class AppState(QObject):
         self.project.captions = store.segments_to_payload(segments)
         if source is not None:
             self.project.source_srt_path = str(source)
+        # Captions transcribed from a video have no source file, but they still
+        # deserve the video's name rather than an untitled project.
+        if name or source is not None:
             self.project.name = name or source.stem.replace("_", " ")
         self._plan = None
         self.outcome = None

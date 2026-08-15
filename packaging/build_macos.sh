@@ -97,6 +97,12 @@ STAMP="$RUNTIME/.installed"
 
 mkdir -p "$SUPPORT"
 
+# The stamp records which requirements the runtime was built from. A plain
+# "already installed" flag would leave everyone who upgrades on the old set of
+# packages, with a new feature that silently does nothing.
+WANTED="$(/usr/bin/shasum -a 256 "$RES/requirements.txt" 2>/dev/null | cut -d' ' -f1)"
+HAVE="$(cat "$STAMP" 2>/dev/null || true)"
+
 dialog() {  # title, message
     /usr/bin/osascript -e "display dialog \"$2\" with title \"$1\" buttons {\"OK\"} default button 1" >/dev/null 2>&1
 }
@@ -112,41 +118,43 @@ find_python() {
     return 1
 }
 
-if [ ! -f "$STAMP" ]; then
+if [ "$HAVE" != "$WANTED" ] || [ ! -x "$PYTHON" ]; then
     HOST_PYTHON="$(find_python)" || {
         dialog "Narration Studio" "Python 3.12 or newer is required.\n\nInstall it from python.org or with:  brew install python@3.12\n\nThen open Narration Studio again."
         exit 1
     }
 
-    # First run needs several minutes and a few GB. Do it in Terminal so the
-    # user can see progress rather than staring at a bouncing dock icon.
+    if [ -x "$PYTHON" ]; then
+        HEADLINE="updating"
+        EXPLAIN="This version needs a few extra components. Only what changed is downloaded."
+    else
+        HEADLINE="first-time setup"
+        EXPLAIN="This downloads the speech engine (about 2 GB) and runs once."
+    fi
+
+    # Needs several minutes and a few GB. Do it in Terminal so the user can see
+    # progress rather than staring at a bouncing dock icon.
     SETUP="$SUPPORT/first-run-setup.sh"
     cat > "$SETUP" <<SETUP_EOF
 #!/usr/bin/env bash
 set -e
 echo ""
-echo "Narration Studio — first-time setup"
+echo "Narration Studio — $HEADLINE"
 echo "-----------------------------------"
-echo "This downloads the speech engine (about 2 GB) and runs once."
+echo "$EXPLAIN"
 echo ""
-"$HOST_PYTHON" -m venv "$RUNTIME"
+[ -x "$PYTHON" ] || "$HOST_PYTHON" -m venv "$RUNTIME"
 "$RUNTIME/bin/python" -m pip install --upgrade pip --quiet
 "$RUNTIME/bin/python" -m pip install -r "$RES/requirements.txt"
-touch "$STAMP"
+printf '%s' "$WANTED" > "$STAMP"
 echo ""
-echo "Setup complete. Opening Narration Studio…"
+echo "Ready. Opening Narration Studio…"
 sleep 1
 open -a "Narration Studio" || true
 SETUP_EOF
     chmod +x "$SETUP"
     open -a Terminal "$SETUP"
     exit 0
-fi
-
-if [ ! -x "$PYTHON" ]; then
-    rm -f "$STAMP"
-    dialog "Narration Studio" "The Python runtime is missing or damaged.\n\nOpen Narration Studio again to reinstall it."
-    exit 1
 fi
 
 cd "$RES"

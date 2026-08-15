@@ -156,36 +156,39 @@ def build_prompt(brand: str = "", terms: str = "") -> str:
 
 #: The workflow shown on the Home screen, before a file is ever imported.
 #:
-#: Two routes, because there are two situations. A screen recording usually has
-#: no voice on it at all and the script has to be written; a talking-head video
-#: already has the words and they only need extracting. The first is the more
-#: common case for tutorials and demos, so it leads.
+#: Two routes, because there are two situations, and step 2 is the fork. If your
+#: voice is already on the video the app can listen to it and write the script
+#: itself; if the video is silent there is nothing to hear, and the words have to
+#: be written before anything can be spoken.
 WORKFLOW_STEPS: tuple[tuple[str, str, str], ...] = (
     (
         "1",
         "Start with your video",
-        "A screen recording is fine, and it does not need any voice on it. "
-        "Narration Studio supplies the voice; the video only has to exist.",
+        "A screen recording is fine. Drop it in above — Narration Studio will "
+        "check whether there is any voice on it and take the right route from "
+        "there.",
     ),
     (
         "2",
-        "Get a script with timings",
-        "If the video is silent, upload it to ChatGPT and ask it to write a "
-        "voice-over script with timings — it will watch the video and tell you "
-        "what to say and when. If you already narrated it yourself, ask instead "
-        "for the words that were spoken, with their timings.",
+        "If your voice is already on it, you are done here",
+        "The app listens to the video, writes down every word with the exact "
+        "time it was said, and shows you the result to correct. Nothing is "
+        "uploaded; the listening happens on this Mac. The first time takes a "
+        "minute longer while it downloads what it needs.",
     ),
     (
         "3",
-        "Ask for it as a .srt file",
-        "Same chat: ask ChatGPT to give you that script as an .srt with the "
-        "timings. Paste the prompt below at the same time and it will also tidy "
-        "the wording so it reads naturally aloud.",
+        "If the video is silent, get the words from ChatGPT",
+        "Upload the video to ChatGPT and ask it to write a voice-over script "
+        "with timings, as a .srt file — it will watch the video and tell you "
+        "what to say and when. Paste the prompt below at the same time and it "
+        "will also tidy the wording so it reads naturally aloud. Then drop that "
+        "file in above.",
     ),
     (
         "4",
-        "Bring the .srt here",
-        "Drop it in above. Choose a voice, generate, listen to the whole thing, "
-        "then export the audio for your editor.",
+        "Pick a voice and listen",
+        "Choose a voice, generate, play the whole thing back, then export the "
+        "audio for your editor. The timings never move.",
     ),
 )

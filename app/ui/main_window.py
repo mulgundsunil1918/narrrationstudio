@@ -425,13 +425,70 @@ class MainWindow(QMainWindow):
         self.go("script")
 
     def _import_media(self, path: Path, kind: str) -> None:
-        """Media import is accepted for context; narration still needs subtitles."""
+        """A video with a voice on it already contains its own script.
+
+        So rather than telling the user to go and make a subtitle file, offer to
+        listen to the file and write one. A silent recording genuinely has
+        nothing to transcribe, and is handled as the different situation it is.
+        """
+        from app.transcribe import has_audio_track, transcriber
+
+        self.state.media_path = path
+        noun = "video" if kind == "video" else "audio file"
+
+        if not has_audio_track(path):
+            self._toast_message(
+                f"Linked {path.name}. There is no voice on it, so import the "
+                f"script for this {noun} as a subtitle or text file.",
+                "info",
+            )
+            return
+
+        # Offering to transcribe and then failing would be worse than not
+        # offering, so check the engine is really there first.
+        available, _ = transcriber("whisper").is_available()
+        if not available:
+            self._toast_message(
+                f"Linked {path.name}. Now import the script for this {noun}.",
+                "info",
+            )
+            return
+
+        self.transcribe_media(path)
+
+    def transcribe_media(self, path: Path) -> None:
+        """Turn a spoken-word file into captions, then continue the workflow."""
+        from app.ui.screens.transcribe_dialog import TranscribeDialog
+
+        dialog = TranscribeDialog(path, self)
+        accepted = dialog.exec()
+        result = dialog.result_data
+
+        if not accepted or result is None or result.is_empty:
+            if dialog.error is not None:
+                self.show_error(dialog.error)
+            else:
+                self._toast_message(
+                    f"Stopped listening to {path.name}. You can import a "
+                    "subtitle file instead.",
+                    "info",
+                )
+            dialog.deleteLater()
+            return
+
+        from app.transcribe import to_segments
+
+        segments = to_segments(result.utterances)
+        dialog.deleteLater()
+
+        self.state.load_segments(segments, None, name=path.stem.replace("_", " "))
         self.state.media_path = path
         self._toast_message(
-            f"Linked {path.name}. Now import the subtitle file for this "
-            f"{'video' if kind == 'video' else 'audio'}.",
-            "info",
+            f"Wrote {len(segments)} lines from {path.name}. "
+            "Check the wording before generating.",
+            "success",
         )
+        self.go("script")
 
     def _on_rejected_file(self, path: Path, reason: str) -> None:
         self.show_error(

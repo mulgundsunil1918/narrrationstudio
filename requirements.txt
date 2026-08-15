@@ -12,6 +12,17 @@ torch==2.2.2
 # kokoro 0.9.4 targets the transformers 4.x API; 5.x changes it.
 transformers==4.49.0
 
+# --- local speech recognition ---
+# Writes the script from a video that already has a voice on it. Chosen over
+# openai-whisper because it runs on CTranslate2 and needs no PyTorch of its own,
+# so it changes none of the pins above.
+#
+# It does bring a second Intel OpenMP runtime alongside torch's, and two of
+# those in one process abort it when a model loads — which is why transcription
+# runs in its own process. See app/transcribe/worker_main.py.
+faster-whisper==1.1.1
+ctranslate2==4.8.1
+
 # --- audio ---
 numpy==1.26.4
 soundfile==0.14.0

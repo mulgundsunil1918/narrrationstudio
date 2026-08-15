@@ -50,6 +50,13 @@ class ErrorCode(str, Enum):
     VIDEO_AUDIO_EXTRACTION_FAILED = "VIDEO_AUDIO_EXTRACTION_FAILED"
     VIDEO_UNSUPPORTED = "VIDEO_UNSUPPORTED"
 
+    # -- transcription -----------------------------------------------
+    TRANSCRIBE_UNAVAILABLE = "TRANSCRIBE_UNAVAILABLE"
+    TRANSCRIBE_MODEL_FAILED = "TRANSCRIBE_MODEL_FAILED"
+    TRANSCRIBE_NO_AUDIO = "TRANSCRIBE_NO_AUDIO"
+    TRANSCRIBE_NO_SPEECH = "TRANSCRIBE_NO_SPEECH"
+    TRANSCRIBE_FAILED = "TRANSCRIBE_FAILED"
+
     # -- projects ----------------------------------------------------
     PROJECT_LOAD_FAILED = "PROJECT_LOAD_FAILED"
     PROJECT_SAVE_FAILED = "PROJECT_SAVE_FAILED"
@@ -138,6 +145,13 @@ ACTIONS: dict[ErrorCode, tuple[str, ...]] = {
     ErrorCode.SRT_EMPTY: ("choose_file", "details"),
     ErrorCode.SRT_UNSUPPORTED: ("choose_file", "details"),
     ErrorCode.VIDEO_UNSUPPORTED: ("choose_file", "details"),
+    ErrorCode.TRANSCRIBE_UNAVAILABLE: ("open_settings", "details"),
+    ErrorCode.TRANSCRIBE_MODEL_FAILED: ("retry", "details"),
+    # No sound and no speech are both "wrong file" situations, so the useful
+    # offer is another file rather than a pointless retry.
+    ErrorCode.TRANSCRIBE_NO_AUDIO: ("choose_file", "details"),
+    ErrorCode.TRANSCRIBE_NO_SPEECH: ("choose_file", "details"),
+    ErrorCode.TRANSCRIBE_FAILED: ("retry", "choose_file", "details"),
 }
 
 ACTION_LABELS = {

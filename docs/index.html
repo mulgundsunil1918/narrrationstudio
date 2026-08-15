@@ -379,39 +379,40 @@
 <section id="how">
   <div class="wrap">
     <div class="eyebrow">How it works</div>
-    <h2>You do not even have to speak.</h2>
+    <h2>You do not have to write a word.</h2>
     <p class="sub">
-      Record the screen, let ChatGPT write the script, and let Narration Studio
-      read it. The app hands you the prompt for the middle step.
+      Drop your video in. If your voice is already on it, the app writes the
+      script itself. If the video is silent, ChatGPT writes it — and the app
+      hands you the prompt.
     </p>
 
     <div class="steps">
       <div class="step">
         <div class="num">1</div>
         <div>
-          <h4>Start with your video</h4>
-          <p>A screen recording is fine, and it does not need any voice on it. Narration Studio supplies the voice — the video only has to exist.</p>
+          <h4>Drop your video in</h4>
+          <p>A screen recording is fine. Narration Studio checks whether there is any voice on it and takes the right route from there.</p>
         </div>
       </div>
       <div class="step">
         <div class="num">2</div>
         <div>
-          <h4>Get a script with timings</h4>
-          <p><strong>Silent video?</strong> Upload it to ChatGPT and ask it to write a voice-over script with timings. It watches the video and tells you what to say and when.<br><strong>Already narrated it yourself?</strong> Ask instead for the words that were spoken, with their timings.</p>
+          <h4>Already spoke over it? You are done here</h4>
+          <p>The app listens to your video, writes down every word with the exact time you said it, and shows you the result to correct. No uploading, no other tools, no waiting on anyone’s servers — it all happens on your own machine.</p>
         </div>
       </div>
       <div class="step">
         <div class="num">3</div>
         <div>
-          <h4>Ask for it as a <code>.srt</code> file</h4>
-          <p>In the same chat, ask for that script as an <code>.srt</code> with the timings. Paste in the prompt from the app at the same time and it will also tidy the wording so it reads naturally aloud.</p>
+          <h4>Silent video? Ask ChatGPT for the words</h4>
+          <p>Upload the video to ChatGPT and ask it to write a voice-over script with timings, as an <code>.srt</code> — it watches the video and tells you what to say and when. Paste in the prompt from the app at the same time and it will also tidy the wording so it reads naturally aloud. Then drop that file in.</p>
         </div>
       </div>
       <div class="step">
         <div class="num">4</div>
         <div>
-          <h4>Bring it here</h4>
-          <p>Drop it in, pick a voice, press generate, listen to the whole thing, then save the audio for your video editor.</p>
+          <h4>Pick a voice and listen</h4>
+          <p>Choose a voice, press generate, listen to the whole thing, then save the audio for your video editor. The timings never move.</p>
         </div>
       </div>
     </div>
@@ -430,6 +431,11 @@
     <h2>Built around one promise: it never drifts out of step.</h2>
 
     <div class="grid">
+      <div class="card">
+        <span class="ico">👂</span>
+        <h3>It writes the script for you</h3>
+        <p>Already talked over your video? Drop it in and the app listens, writes down every word, and keeps the exact moment you said each one. No other tool, no upload, no typing it out.</p>
+      </div>
       <div class="card">
         <span class="ico">🎯</span>
         <h3>Always in step</h3>
@@ -486,8 +492,8 @@
       <tr><td>Operating system</td><td>macOS 12 or newer · Windows 10 or 11</td></tr>
       <tr><td>Python</td><td>3.12 or newer — <a href="https://www.python.org/downloads/" style="color:var(--accent)">python.org</a>. On Windows tick “Add python.exe to PATH”.</td></tr>
       <tr><td>FFmpeg</td><td><code style="font-family:var(--mono);font-size:13.5px">brew install ffmpeg</code> on macOS · <code style="font-family:var(--mono);font-size:13.5px">winget install Gyan.FFmpeg</code> on Windows</td></tr>
-      <tr><td>Disk space</td><td>About 3 GB for the voice, downloaded once the first time you open it</td></tr>
-      <tr><td>What you feed it</td><td>Your video’s words with their timings — the file any captioning tool or ChatGPT gives you (<code style="font-family:var(--mono);font-size:13.5px">.srt</code>). Plain text works too.</td></tr>
+      <tr><td>Disk space</td><td>About 3 GB for the voice, downloaded once the first time you open it. Letting it listen to a video adds about 500 MB more, also once.</td></tr>
+      <tr><td>What you feed it</td><td>A video with your voice on it — the app writes the script itself. Or your video’s words with their timings, the file any captioning tool or ChatGPT gives you (<code style="font-family:var(--mono);font-size:13.5px">.srt</code>). Plain text works too.</td></tr>
       </tbody>
     </table>
 

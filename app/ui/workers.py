@@ -178,6 +178,118 @@ class PreviewWorker(QObject):
             )
 
 
+class TranscribeWorker(QObject):
+    """Listens to a video or audio file and reports the words it hears.
+
+    Unlike generation this has no known unit of work until the model starts
+    returning segments, so progress is reported as a fraction of the media's
+    duration and the latest line of text is passed along with it — a transcript
+    appearing on screen is the clearest possible proof it has not hung.
+    """
+
+    progress = Signal(object, str)   # (fraction | None, message)
+    finished = Signal(object)        # TranscriptionResult
+    failed = Signal(object)          # OperationError
+    cancelled = Signal()
+
+    def __init__(self, media_path: Path, model_size: str = "small", language: str = "") -> None:
+        super().__init__()
+        self._media_path = Path(media_path)
+        self._model_size = model_size
+        self._language = language
+        self._cancelled = False
+        self._last_progress = time.monotonic()
+
+    def cancel(self) -> None:
+        self._cancelled = True
+
+    def _should_cancel(self) -> bool:
+        return self._cancelled
+
+    def _on_progress(self, fraction, message: str) -> None:
+        self._last_progress = time.monotonic()
+        self.progress.emit(fraction, message)
+
+    def run(self) -> None:
+        from app.core.errors import StudioError
+        from app.transcribe import TranscribeRequest, transcriber
+
+        try:
+            engine = transcriber("whisper")
+            available, why = engine.is_available()
+            if not available:
+                self.failed.emit(
+                    OperationError(
+                        ErrorCode.TRANSCRIBE_UNAVAILABLE,
+                        "This copy of the app cannot listen to videos.",
+                        reason=why,
+                        recommended_action=(
+                            "Reinstall the app, or import a subtitle file instead."
+                        ),
+                        operation="transcribe",
+                    )
+                )
+                return
+
+            result = engine.transcribe(
+                TranscribeRequest(
+                    media_path=self._media_path,
+                    language=self._language,
+                    model_size=self._model_size,
+                ),
+                on_progress=self._on_progress,
+                should_cancel=self._should_cancel,
+            )
+        except StudioError as exc:
+            if self._cancelled:
+                self.cancelled.emit()
+                return
+            logger.warning("Transcription failed: %s", exc)
+            self.failed.emit(
+                OperationError(
+                    _transcribe_code(exc),
+                    getattr(exc, "message", str(exc)),
+                    reason=getattr(exc, "reason", ""),
+                    recommended_action=getattr(exc, "suggestion", "")
+                    or "Try another file, or import a subtitle file instead.",
+                    details=getattr(exc, "detail", ""),
+                    operation="transcribe",
+                )
+            )
+            return
+        except Exception as exc:
+            logger.exception("Transcription failed")
+            self.failed.emit(
+                capture(
+                    exc,
+                    ErrorCode.TRANSCRIBE_FAILED,
+                    user_message=f"“{self._media_path.name}” could not be transcribed.",
+                    recommended_action=(
+                        "Try again, or import a subtitle file for this video instead."
+                    ),
+                    operation="transcribe",
+                )
+            )
+            return
+
+        if self._cancelled:
+            self.cancelled.emit()
+            return
+        self.finished.emit(result)
+
+
+def _transcribe_code(exc: Exception) -> ErrorCode:
+    """Map a transcription failure onto the code that carries the right offer."""
+    message = f"{getattr(exc, 'message', '')} {getattr(exc, 'reason', '')}".lower()
+    if "no sound" in message or "no audio" in message:
+        return ErrorCode.TRANSCRIBE_NO_AUDIO
+    if "model" in message:
+        return ErrorCode.TRANSCRIBE_MODEL_FAILED
+    if "ffmpeg" in message:
+        return ErrorCode.FFMPEG_NOT_FOUND
+    return ErrorCode.TRANSCRIBE_FAILED
+
+
 class ExportWorker(QObject):
     """Writes the finished timeline to disk in the requested formats."""
 
