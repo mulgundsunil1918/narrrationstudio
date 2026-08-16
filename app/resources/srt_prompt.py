@@ -104,6 +104,20 @@ BAD:
   2: "Small teams and independent studios."
 
 ==================================================
+5b. PACING CHECK
+==================================================
+
+People speak at about 2.4 words per second. For every caption, divide its word
+count by its duration in seconds:
+
+- Over 2.8 words/second: the wording is too dense for its window. TIGHTEN THE
+  WORDING until it fits. Never touch the timestamp to make room.
+- A caption that is only a dangling fragment ("with", "the", "of") cannot be
+  fixed by rewording, and you may not merge or retime captions. List every
+  such caption under the heading "PACING PROBLEMS" in your summary instead,
+  so I can repair the timings in my app.
+
+==================================================
 6. PUNCTUATION FOR SPEECH
 ==================================================
 
@@ -166,6 +180,85 @@ def build_prompt(brand: str = "", terms: str = "") -> str:
     )
 
 
+#: The authoring prompt, for a silent video with no script at all.
+#:
+#: This exists because "ask ChatGPT to write a script with timings" without
+#: rules produces exactly what was measured in the field: 3.1 seconds of words
+#: in a 1.7-second window next to seconds of surplus, and single words like
+#: "with" given 1.6 seconds of their own. The timing budget below is the whole
+#: point of the prompt — an AI follows arithmetic it is given far better than
+#: pacing it is left to imagine.
+SCRIPT_PROMPT_TEMPLATE = """\
+You are my voice-over writer. I am uploading a video that has no narration.
+Watch it and write the script a narrator should read over it, with timings, and
+give it back as a downloadable .srt file.
+
+The script will be read aloud by a text-to-speech narrator exactly as written,
+at the exact times you set — so the timing arithmetic below matters more than
+anything else. Timings that ignore it make the narration rush or drag.
+
+==================================================
+1. THE TIMING BUDGET  (the most important section)
+==================================================
+
+A narrator speaks about 2.4 words per second. For EVERY caption:
+
+- duration_in_seconds must be at least (word_count / 2.4) + 0.4
+  A 12-word caption therefore needs at least 5.4 seconds. Check the arithmetic
+  for every single caption before you return the file.
+- 4 to 16 words per caption. NEVER give one or two words their own caption —
+  no caption may be just "with" or "the" or "Link in bio" stretched over
+  seconds. Fold small phrases into the caption before or after them.
+- A caption is a complete phrase or sentence, never cut mid-phrase.
+- Leave a 0.3 to 0.8 second gap between captions for breathing.
+- Where the screen should speak for itself, leave a LONGER gap with no caption
+  at all. Never stretch a short line over a long stretch of video — three
+  words must never own ten seconds.
+
+==================================================
+2. WHAT TO WRITE
+==================================================
+
+Watch what is actually on screen and narrate it: clear, confident,
+conversational, explaining to a peer. Not marketing copy. Short sentences
+spoken language handles well.
+
+Always write my brand exactly as:
+
+{brand}
+
+Use these specialist terms correctly where they apply:
+
+{terms}
+
+==================================================
+3. VERIFY BEFORE RETURNING
+==================================================
+
+For every caption, recompute words ÷ duration: none may exceed 2.8 words per
+second. Confirm no caption has fewer than 4 words, captions never overlap, and
+gaps exist between them. Fix violations before returning the file — do not
+return a file with a violation and a note about it.
+
+==================================================
+4. OUTPUT
+==================================================
+
+Return the script as a downloadable .srt file — numbered captions,
+HH:MM:SS,mmm --> HH:MM:SS,mmm timestamps. One complete file, first caption to
+last: not text in the chat, not a code block, never split across messages, and
+never summarised with "[...continues...]".
+"""
+
+
+def build_script_prompt(brand: str = "", terms: str = "") -> str:
+    """The authoring prompt, filled the same way as the polishing one."""
+    return SCRIPT_PROMPT_TEMPLATE.format(
+        brand=brand.strip() or BRAND_PLACEHOLDER,
+        terms=terms.strip() or TERMS_PLACEHOLDER,
+    )
+
+
 #: The workflow shown on the Home screen, before a file is ever imported.
 #:
 #: Two routes, because there are two situations, and step 2 is the fork. If your
@@ -191,11 +284,10 @@ WORKFLOW_STEPS: tuple[tuple[str, str, str], ...] = (
     (
         "3",
         "If the video is silent, get the words from ChatGPT",
-        "Upload the video to ChatGPT and ask it to write a voice-over script "
-        "with timings, as a .srt file — it will watch the video and tell you "
-        "what to say and when. Paste the prompt below at the same time and it "
-        "will also tidy the wording so it reads naturally aloud. Then drop that "
-        "file in above.",
+        "Upload the video to ChatGPT with the script-writing prompt below — it "
+        "watches the video and writes the narration with properly paced "
+        "timings, about 2.4 words a second with room to breathe, so the voice "
+        "neither rushes nor drags. Then drop the .srt it returns in above.",
     ),
     (
         "4",

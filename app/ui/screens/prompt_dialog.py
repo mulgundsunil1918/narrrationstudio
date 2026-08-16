@@ -33,12 +33,38 @@ from app.ui.widgets.common import (
 )
 
 
-class PromptDialog(QDialog):
-    """Shows the prompt with the user's terms filled in, and copies it."""
+#: What each prompt is for, shown as the switch and the explainer.
+PURPOSES = {
+    "write": (
+        "Write the script",
+        "For a silent video. ChatGPT watches it and writes the narration with "
+        "timings that follow a strict speaking-pace budget — about 2.4 words a "
+        "second, whole phrases per caption, gaps to breathe in. That budget is "
+        "what stops the voice rushing in one place and dragging in the next.",
+        "Your video never leaves ChatGPT’s chat — the app itself uploads nothing",
+    ),
+    "polish": (
+        "Polish existing subtitles",
+        "For an .srt you already have. Fixes mis-heard words, names and "
+        "punctuation, tightens wording that cannot be spoken in its window, "
+        "and reports pacing problems it is not allowed to fix.",
+        "Your timestamps stay untouched — only the wording changes",
+    ),
+}
 
-    def __init__(self, parent: QWidget | None = None, brand: str = "", terms: str = "") -> None:
+
+class PromptDialog(QDialog):
+    """Shows the right prompt with the user's terms filled in, and copies it."""
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        brand: str = "",
+        terms: str = "",
+        purpose: str = "write",
+    ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Prepare your subtitles")
+        self.setWindowTitle("ChatGPT prompts")
         self.setModal(True)
         self.setMinimumSize(820, 700)
 
@@ -46,20 +72,23 @@ class PromptDialog(QDialog):
         outer.setContentsMargins(24, 22, 24, 20)
         outer.setSpacing(14)
 
-        outer.addWidget(title("Clean up your subtitles first"))
-        outer.addWidget(
-            muted(
-                "Speech-to-text mis-hears names and puts full stops in the wrong "
-                "places. That is the single biggest cause of narration that sounds "
-                "unnatural. Paste this into ChatGPT, Claude or any AI along with "
-                "your .srt file, then bring the result back here.",
-                wrap=True,
-            )
-        )
+        outer.addWidget(title("The prompt to hand to ChatGPT"))
 
-        promise = Pill("Your timestamps stay untouched — only the wording changes", "info")
-        promise.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        outer.addWidget(promise, alignment=Qt.AlignmentFlag.AlignLeft)
+        from app.ui.widgets.common import Segmented
+
+        self._purpose = Segmented(
+            [(key, name) for key, (name, _d, _p) in PURPOSES.items()],
+            initial=purpose if purpose in PURPOSES else "write",
+        )
+        self._purpose.changed.connect(lambda _k: self._refresh())
+        outer.addWidget(self._purpose)
+
+        self._description = muted("", wrap=True)
+        outer.addWidget(self._description)
+
+        self._promise = Pill("", "info")
+        self._promise.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        outer.addWidget(self._promise, alignment=Qt.AlignmentFlag.AlignLeft)
 
         outer.addWidget(self._build_fields(brand, terms))
 
@@ -120,7 +149,15 @@ class PromptDialog(QDialog):
         return row
 
     def _refresh(self) -> None:
-        self._text.setPlainText(build_prompt(self._brand.text(), self._terms.text()))
+        from app.resources.srt_prompt import build_script_prompt
+
+        key = self._purpose.current()
+        _name, description, promise = PURPOSES[key]
+        self._description.setText(description)
+        self._promise.setText(promise)
+
+        builder = build_script_prompt if key == "write" else build_prompt
+        self._text.setPlainText(builder(self._brand.text(), self._terms.text()))
 
     def _copy(self) -> None:
         clipboard = QGuiApplication.clipboard()

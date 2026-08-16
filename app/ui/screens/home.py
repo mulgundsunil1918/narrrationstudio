@@ -145,10 +145,10 @@ class HomeScreen(QScrollArea):
             if number == "3":
                 inline = QHBoxLayout()
                 inline.setContentsMargins(0, 6, 0, 2)
-                prompt_button = SecondaryButton("Copy the SRT enhancing prompt")
+                prompt_button = SecondaryButton("Get the ChatGPT prompts…")
                 prompt_button.setToolTip(
-                    "A ready-made prompt for ChatGPT — fixes the wording without "
-                    "touching your timestamps"
+                    "Ready-made prompts: one that writes the script with properly "
+                    "paced timings, one that polishes an existing .srt"
                 )
                 prompt_button.clicked.connect(self.show_prompt)
                 inline.addWidget(prompt_button)

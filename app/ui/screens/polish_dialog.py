@@ -285,7 +285,7 @@ class PolishDialog(QDialog):
     def show_prompt(self) -> None:
         from app.ui.screens.prompt_dialog import PromptDialog
 
-        PromptDialog(self).exec()
+        PromptDialog(self, purpose="polish").exec()
 
     # -- step 3 ----------------------------------------------------------
 
